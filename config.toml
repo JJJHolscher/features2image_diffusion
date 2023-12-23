@@ -1,0 +1,14 @@
+
+device = "cuda:0"
+mnist_dir = "./res/mnist"
+
+[[run]]
+feature_dir = "../sparse_autoencoder/run/171d21f725b8721bc98f2d334b103d6b0e83570a958c461866fd12c6280a670f"
+
+epochs = 20
+batch_size = 64
+diffusion_steps = 400
+hidden_size = 128
+lr = 1e-4
+ws_test = [0.0, 0.5, 2.0,]
+drop_prob = 0.0

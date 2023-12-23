@@ -1,6 +1,6 @@
 
 [project]
-name = "NAME"
+name = "features2image_diffusion"
 version = "0.0.0" # TODO; automatically update versions by looking at git
 description = ""
 dependencies = []
@@ -19,7 +19,7 @@ demo = []
 github = "JJJHolscher"
 
 [project.urls]
-homepage = "https://github.com/JJJHolscher/NAME"
+homepage = "https://github.com/JJJHolscher/features2image_diffusion"
 
 [[project.authors]]
 name = "Jochem Hölscher"
@@ -32,7 +32,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["NAME"]
+include = ["features2image_diffusion"]
 
 [tool.setuptools.dynamic]
 readme = {file = ["README.md"], content-type = "text/markdown"}
