@@ -163,7 +163,7 @@ class ContextUnet(nn.Module):
         hiddenvec = self.to_vec(down2)
 
         # mask out context if context_mask == 1
-        c *= (-1*(1-context_mask))  # need to flip 0 <-> 1
+        c = c * (-1*(1-context_mask))  # need to flip 0 <-> 1
 
         # embed context, time step
         cemb1 = self.contextembed1(c).view(-1, self.hidden_size * 2, 1, 1)
@@ -264,8 +264,7 @@ class DDPM(nn.Module):
         context: Float[torch.Tensor, "batch feature"],
         n_sample: int,
         size: tuple,
-        device: str,
-        guide_w: float = 0.0
+        device: str
     ):
         """Generate images guided by the context.
 

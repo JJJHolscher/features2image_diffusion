@@ -39,7 +39,6 @@ def evaluate(
     f: Float[torch.Tensor, "n_example feature"],
     x: Float[torch.Tensor, "n_example 1 28 28"],
     n_sample: int,
-    ws_test: float,
     result_dir: Path,
     ep: int,
     gif: bool = False
@@ -60,22 +59,22 @@ def evaluate(
     """
     n_example = len(f)
     x_gen, x_gen_store = ddpm.sample(
-        f, n_sample, (1, 28, 28), DEVICE, guide_w=ws_test
+        f, n_sample, (1, 28, 28), DEVICE
     )
 
     fig, axs = plt.subplots(n_sample + 1, n_example, facecolor='gray')
     fig.tight_layout()
     for c in range(n_example):
         for r in range(n_sample):
-            i = c * n_sample + r
+            i = r * n_example + c
             axs[r, c].imshow(to_img(x_gen[i].to("cpu")))
             axs[r, c].set_axis_off()
 
         axs[n_sample, c].imshow(to_img(x[c].to("cpu")))
         axs[n_sample, c].set_axis_off()
 
-    plt.savefig(result_dir / f"image_ep{ep}_w{ws_test}.png")
-    print(f"saved image at {result_dir}/image_ep{ep}_w{ws_test}.png")
+    plt.savefig(result_dir / f"image_ep{ep}.png")
+    print(f"saved image at {result_dir}/image_ep{ep}.png")
 
     if gif:
         # gif of images evolving over time, based on x_gen_store
@@ -120,11 +119,11 @@ def evaluate(
             frames=x_gen_store.shape[0]
         )
         ani.save(
-            result_dir / f"gif_ep{ep}_w{ws_test}.gif",
+            result_dir / f"gif_ep{ep}.gif",
             dpi=100,
             writer=PillowWriter(fps=5)
         )
-        print(f"saved image at {result_dir}/gif_ep{ep}_w{ws_test}.gif")
+        print(f"saved image at {result_dir}/gif_ep{ep}.gif")
 
 
 def train_epoch(
@@ -188,7 +187,6 @@ def train(
     drop_prob: float = 0.0,
     n_example: int = 5,  # Amount of test set images to use
     n_sample: int = 4,  # Amount of generations per test set image
-    ws_test: list[float] = [0.0, 0.5, 2.0]  # strength of generative guidance
 ):
     """Create and train a DDPM on MNIST conditioned on features from a CNN.
 
@@ -222,8 +220,6 @@ def train(
             approximate during evaluation.
         n_sample: the number of generations per example test image the DDPM
             creates during evaluation.
-        ws_test: the strength of the conditioning during evaluation. The DDPM
-            will be evaluated separately for each number in this list.
     """
     # mnist is already normalised 0 to 1
     # _ = transforms.Compose([transforms.ToTensor()])
@@ -272,24 +268,22 @@ def train(
         # followed by real images (bottom rows)
         ddpm.eval()
         with torch.no_grad():
-            for w in ws_test:
-                if (result_dir / f"image_ep{ep}_w{w}.png").exists():
-                    continue
-                if not ddpm_loaded:
-                    ddpm.load_state_dict(torch.load(model_path))
-                    ddpm_loaded = True
+            if (result_dir / f"image_ep{ep}.png").exists():
+                continue
+            if not ddpm_loaded:
+                ddpm.load_state_dict(torch.load(model_path))
+                ddpm_loaded = True
 
-                f, x, _ = next(test_loader)
-                evaluate(
-                    ddpm,
-                    f[:n_example],
-                    x[:n_example],
-                    n_sample,
-                    w,
-                    result_dir,
-                    ep=ep,
-                    gif=ep % 5 == 0 or ep == int(n_epoch-1)
-                )
+            f, x, _ = next(test_loader)
+            evaluate(
+                ddpm,
+                f[:n_example],
+                x[:n_example],
+                n_sample,
+                result_dir,
+                ep=ep,
+                gif=ep % 5 == 0 or ep == int(n_epoch-1)
+            )
 
 
 if __name__ == "__main__":
