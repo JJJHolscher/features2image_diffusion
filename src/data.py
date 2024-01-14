@@ -2,21 +2,24 @@
 # vim:fenc=utf-8
 
 from pathlib import Path
-from jo3util.warning import todo
+from typing import Tuple, Union
+
 import numpy as np
-from torch.utils.data import DataLoader, Dataset
 import torchvision
+from jo3util.warning import todo
+from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import MNIST
 
 
 class MnistFeaturesSet(Dataset):
+    """The MNIST set that also yields the features associated with the image.
+
+    When getting an item from this, it returns `features, image, label`
+    """
 
     def __init__(self, features_path, mnist_path, train=True, transform=None):
         self.mnist = MNIST(
-            mnist_path,
-            train=train,
-            download=True,
-            transform=transform
+            mnist_path, train=train, download=True, transform=transform
         )
 
         train = "train" if train else "test"
@@ -36,11 +39,13 @@ class MnistFeaturesSet(Dataset):
 
 
 def load_mnist_with_features(
-    features_path,
-    mnist_path,
-    batch_size,
-    shuffle=True
-):
+    features_path: Union[Path, str],
+    mnist_path: Union[Path, str],
+    batch_size: int,
+    shuffle: bool = True,
+) -> Tuple[DataLoader, DataLoader]:
+    """ Load train and test dataloaders that yield features, image and label.
+    """
     normalise_data = torchvision.transforms.Compose(
         [
             torchvision.transforms.ToTensor(),
@@ -48,25 +53,13 @@ def load_mnist_with_features(
         ]
     )
     train_set = MnistFeaturesSet(
-        features_path,
-        mnist_path,
-        train=True,
-        transform=normalise_data
+        features_path, mnist_path, train=True, transform=normalise_data
     )
     test_set = MnistFeaturesSet(
-        features_path,
-        mnist_path,
-        train=False,
-        transform=normalise_data
+        features_path, mnist_path, train=False, transform=normalise_data
     )
     train_loader = DataLoader(
-        train_set,
-        batch_size=batch_size,
-        shuffle=shuffle
+        train_set, batch_size=batch_size, shuffle=shuffle
     )
-    test_loader = DataLoader(
-        test_set,
-        batch_size=batch_size,
-        shuffle=shuffle
-    )
+    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=shuffle)
     return train_loader, test_loader

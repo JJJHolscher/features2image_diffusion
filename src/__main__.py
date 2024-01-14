@@ -13,25 +13,23 @@ I (Jochem Hölscher) have edited the code such that the same DDPM is conditioned
 on the features instead.
 """
 
+from pathlib import Path
+from typing import Optional
+
 import argtoml
+import matplotlib.pyplot as plt
+import torch
 from jaxtyping import Float
 from jo3mnist.vis import to_img
 from jo3util.root import run_dir as jo3run_dir
-from pathlib import Path
-from typing import Dict, Tuple
-from tqdm import tqdm
-import torch
-from torch.utils.data import DataLoader
-from torch.optim import Optimizer
-from torchvision.utils import save_image, make_grid
-import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
+from torch.optim import Optimizer
+from torch.utils.data import DataLoader
+from torchvision.utils import make_grid, save_image
+from tqdm import tqdm
 
-from .unet import DDPM, ContextUnet
 from .data import load_mnist_with_features
-
-O = argtoml.parse_args()
-DEVICE = O.device
+from .unet import DDPM, ContextUnet
 
 
 def evaluate(
@@ -39,9 +37,9 @@ def evaluate(
     f: Float[torch.Tensor, "n_example feature"],
     x: Float[torch.Tensor, "n_example 1 28 28"],
     n_sample: int,
-    result_dir: Path,
-    ep: int,
-    gif: bool = False
+    img_path: Optional[Path],
+    gif_path: Optional[Path] = None,
+    device: str = "cpu",
 ):
     """Compare conditioned ddpm generations with images from the data set.
 
@@ -58,11 +56,9 @@ def evaluate(
         gif: whether to create a gif showing the image generation process
     """
     n_example = len(f)
-    x_gen, x_gen_store = ddpm.sample(
-        f, n_sample, (1, 28, 28), DEVICE
-    )
+    x_gen, x_gen_store = ddpm.sample(f, n_sample, (1, 28, 28), device)
 
-    fig, axs = plt.subplots(n_sample + 1, n_example, facecolor='gray')
+    fig, axs = plt.subplots(n_sample + 1, n_example, facecolor="gray")
     fig.tight_layout()
     for c in range(n_example):
         for r in range(n_sample):
@@ -73,57 +69,53 @@ def evaluate(
         axs[n_sample, c].imshow(to_img(x[c].to("cpu")))
         axs[n_sample, c].set_axis_off()
 
-    plt.savefig(result_dir / f"image_ep{ep}.png")
-    print(f"saved image at {result_dir}/image_ep{ep}.png")
+    plt.savefig(img_path)
+    print("saved image at", img_path)
 
-    if gif:
-        # gif of images evolving over time, based on x_gen_store
-        fig, axs = plt.subplots(
-            nrows=n_sample,
-            ncols=n_example,
-            sharex=True,
-            sharey=True,
-            figsize=(8, 3)
-        )
+    if not gif_path:
+        return
+    # gif of images evolving over time, based on x_gen_store
+    fig, axs = plt.subplots(
+        nrows=n_sample,
+        ncols=n_example,
+        sharex=True,
+        sharey=True,
+        figsize=(8, 3),
+    )
 
-        def animate_diff(i, x_gen_store):
-            print(
-                f"gif animating frame {i} of",
-                x_gen_store.shape[0],
-                end='\r'
-            )
-            plots = []
-            for row in range(int(n_sample)):
-                for col in range(n_example):
-                    axs[row, col].clear()
-                    axs[row, col].set_xticks([])
-                    axs[row, col].set_yticks([])
-                    # plots.append(axs[row, col].imshow(
-                    #     x_gen_store[i,(row*n_classes)+col,0],
-                    #     cmap='gray')
-                    # )
-                    plots.append(axs[row, col].imshow(
-                        -x_gen_store[i, (row*n_example)+col, 0],
-                        cmap='gray',
+    def animate_diff(i, x_gen_store):
+        print(f"gif animating frame {i} of", x_gen_store.shape[0], end="\r")
+        plots = []
+        for row in range(int(n_sample)):
+            for col in range(n_example):
+                axs[row, col].clear()
+                axs[row, col].set_xticks([])
+                axs[row, col].set_yticks([])
+                # plots.append(axs[row, col].imshow(
+                #     x_gen_store[i,(row*n_classes)+col,0],
+                #     cmap='gray')
+                # )
+                plots.append(
+                    axs[row, col].imshow(
+                        -x_gen_store[i, (row * n_example) + col, 0],
+                        cmap="gray",
                         vmin=(-x_gen_store[i]).min(),
-                        vmax=(-x_gen_store[i]).max())
+                        vmax=(-x_gen_store[i]).max(),
                     )
-            return plots
-        ani = FuncAnimation(
-            fig,
-            animate_diff,
-            fargs=[x_gen_store],
-            interval=200,
-            blit=False,
-            repeat=True,
-            frames=x_gen_store.shape[0]
-        )
-        ani.save(
-            result_dir / f"gif_ep{ep}.gif",
-            dpi=100,
-            writer=PillowWriter(fps=5)
-        )
-        print(f"saved image at {result_dir}/gif_ep{ep}.gif")
+                )
+        return plots
+
+    ani = FuncAnimation(
+        fig,
+        animate_diff,
+        fargs=[x_gen_store],
+        interval=200,
+        blit=False,
+        repeat=True,
+        frames=x_gen_store.shape[0],
+    )
+    ani.save(gif_path, dpi=100, writer=PillowWriter(fps=5))
+    print("saved image at", gif_path)
 
 
 def train_epoch(
@@ -132,7 +124,8 @@ def train_epoch(
     optim: Optimizer,
     lr: float,
     ep: int,
-    n_epoch: int
+    n_epoch: int,
+    device: str = "cpu",
 ):
     """A single epoch of training the DDPM.
 
@@ -157,14 +150,14 @@ def train_epoch(
     ddpm.train()
 
     # linear learning rate decay
-    optim.param_groups[0]['lr'] = lr * (1 - ep / n_epoch)
+    optim.param_groups[0]["lr"] = lr * (1 - ep / n_epoch)
 
     pbar = tqdm(train_loader)
     loss_ema = None
     for f, x, _ in pbar:
         optim.zero_grad()
-        x = x.to(DEVICE)
-        f = f.to(DEVICE)
+        x = x.to(device)
+        f = f.to(device)
         loss = ddpm(x, f)
         loss.backward()
         if loss_ema is None:
@@ -187,6 +180,7 @@ def train(
     drop_prob: float = 0.0,
     n_example: int = 5,  # Amount of test set images to use
     n_sample: int = 4,  # Amount of generations per test set image
+    device: str = "cpu",
 ):
     """Create and train a DDPM on MNIST conditioned on features from a CNN.
 
@@ -224,25 +218,21 @@ def train(
     # mnist is already normalised 0 to 1
     # _ = transforms.Compose([transforms.ToTensor()])
     train_loader, test_loader = load_mnist_with_features(
-        features_path,
-        mnist_path,
-        batch_size
+        features_path, mnist_path, batch_size
     )
     test_loader = iter(test_loader)
     n_classes = next(iter(train_loader))[0].shape[-1]
 
     ddpm = DDPM(
         nn_model=ContextUnet(
-            in_channels=1,
-            hidden_size=hidden_size,
-            n_classes=n_classes
+            in_channels=1, hidden_size=hidden_size, n_classes=n_classes
         ),
         betas=(1e-4, 0.02),
         n_T=n_T,
-        device=DEVICE,
-        drop_prob=drop_prob
+        device=device,
+        drop_prob=drop_prob,
     )
-    ddpm.to(DEVICE)
+    ddpm.to(device)
     ddpm_loaded = False
 
     # optionally load a model
@@ -256,19 +246,26 @@ def train(
     result_dir.mkdir(exist_ok=True)
 
     for ep in range(n_epoch):
-
         model_path = model_dir / f"epoch-{ep}.pth"
         if not model_path.exists():
-            print(f'epoch {ep}')
-            train_epoch(ddpm, train_loader, optim, lr, ep, n_epoch)
+            print(f"epoch {ep}")
+            train_epoch(
+                ddpm,
+                train_loader,
+                optim,
+                lr,
+                ep,
+                n_epoch,
+                device=device,
+            )
             torch.save(ddpm.state_dict(), model_path)
             ddpm_loaded = True
-
         # for eval, save an image of currently generated samples (top rows)
         # followed by real images (bottom rows)
         ddpm.eval()
         with torch.no_grad():
-            if (result_dir / f"image_ep{ep}.png").exists():
+            img_path = result_dir / f"image_ep{ep}.png"
+            if img_path.exists():
                 continue
             if not ddpm_loaded:
                 ddpm.load_state_dict(torch.load(model_path))
@@ -280,13 +277,14 @@ def train(
                 f[:n_example],
                 x[:n_example],
                 n_sample,
-                result_dir,
-                ep=ep,
-                gif=ep % 5 == 0 or ep == int(n_epoch-1)
+                img_path,
+                result_dir / f"gif_ep{ep}.gif" if not ep % 5 else None,
+                device=device,
             )
 
 
 if __name__ == "__main__":
+    O = argtoml.parse_args()
     for RUN in O.run:
         RUN_DIR = jo3run_dir(RUN)
         if not RUN_DIR.exists():
@@ -300,5 +298,5 @@ if __name__ == "__main__":
             n_epoch=RUN.epochs,
             hidden_size=RUN.hidden_size,
             batch_size=RUN.batch_size,
-            drop_prob=RUN.drop_prob
+            drop_prob=RUN.drop_prob,
         )

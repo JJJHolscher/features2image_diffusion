@@ -1,4 +1,4 @@
-''' 
+""" 
 This script does conditional image generation on MNIST, using a diffusion model
 
 This code is modified from,
@@ -17,12 +17,16 @@ This script was copied by Jochem Hölscher in mid December 2023.
 The main edits I made are in ContextUnet.forward and DDPM.sample.
 Those changes have to do with making the context no longer one-hot.
 Also the training function is moved to __main__.py.
-'''
+"""
 
-from jaxtyping import Float
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
+from argtoml import SimpleNamespace
+from jaxtyping import Float
 
 
 class ResidualConvBlock(nn.Module):
@@ -30,10 +34,10 @@ class ResidualConvBlock(nn.Module):
         self, in_channels: int, out_channels: int, is_res: bool = False
     ) -> None:
         super().__init__()
-        '''
+        """
         standard ResNet style convolutional block
-        '''
-        self.same_channels = in_channels==out_channels
+        """
+        self.same_channels = in_channels == out_channels
         self.is_res = is_res
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 3, 1, 1),
@@ -54,7 +58,7 @@ class ResidualConvBlock(nn.Module):
             if self.same_channels:
                 out = x + x2
             else:
-                out = x1 + x2 
+                out = x1 + x2
             return out / 1.414
         else:
             x1 = self.conv1(x)
@@ -65,10 +69,13 @@ class ResidualConvBlock(nn.Module):
 class UnetDown(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UnetDown, self).__init__()
-        '''
+        """
         process and downscale the image feature maps
-        '''
-        layers = [ResidualConvBlock(in_channels, out_channels), nn.MaxPool2d(2)]
+        """
+        layers = [
+            ResidualConvBlock(in_channels, out_channels),
+            nn.MaxPool2d(2),
+        ]
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -78,9 +85,9 @@ class UnetDown(nn.Module):
 class UnetUp(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UnetUp, self).__init__()
-        '''
+        """
         process and upscale the image feature maps
-        '''
+        """
         layers = [
             nn.ConvTranspose2d(in_channels, out_channels, 2, 2),
             ResidualConvBlock(out_channels, out_channels),
@@ -97,9 +104,9 @@ class UnetUp(nn.Module):
 class EmbedFC(nn.Module):
     def __init__(self, input_dim, emb_dim):
         super(EmbedFC, self).__init__()
-        '''
+        """
         generic one layer FC NN for embedding things  
-        '''
+        """
         self.input_dim = input_dim
         layers = [
             nn.Linear(input_dim, emb_dim),
@@ -130,10 +137,10 @@ class ContextUnet(nn.Module):
 
         self.to_vec = nn.Sequential(nn.AvgPool2d(7), nn.GELU())
 
-        self.timeembed1 = EmbedFC(1, 2*hidden_size)
-        self.timeembed2 = EmbedFC(1, 1*hidden_size)
-        self.contextembed1 = EmbedFC(n_classes, 2*hidden_size)
-        self.contextembed2 = EmbedFC(n_classes, 1*hidden_size)
+        self.timeembed1 = EmbedFC(1, 2 * hidden_size)
+        self.timeembed2 = EmbedFC(1, 1 * hidden_size)
+        self.contextembed1 = EmbedFC(n_classes, 2 * hidden_size)
+        self.contextembed2 = EmbedFC(n_classes, 1 * hidden_size)
 
         self.up0 = nn.Sequential(
             # when concat temb and cemb end up w 6*hidden_size
@@ -163,7 +170,7 @@ class ContextUnet(nn.Module):
         hiddenvec = self.to_vec(down2)
 
         # mask out context if context_mask == 1
-        c = c * (-1*(1-context_mask))  # need to flip 0 <-> 1
+        c = c * (-1 * (1 - context_mask))  # need to flip 0 <-> 1
 
         # embed context, time step
         cemb1 = self.contextembed1(c).view(-1, self.hidden_size * 2, 1, 1)
@@ -190,7 +197,9 @@ def ddpm_schedules(beta1, beta2, T):
     """
     assert beta1 < beta2 < 1.0, "beta1 and beta2 must be in (0, 1)"
 
-    beta_t = (beta2 - beta1) * torch.arange(0, T + 1, dtype=torch.float32) / T + beta1
+    beta_t = (beta2 - beta1) * torch.arange(
+        0, T + 1, dtype=torch.float32
+    ) / T + beta1
     sqrt_beta_t = torch.sqrt(beta_t)
     alpha_t = 1 - beta_t
     log_alpha_t = torch.log(alpha_t)
@@ -231,14 +240,14 @@ class DDPM(nn.Module):
     def forward(
         self,
         x: Float[torch.Tensor, "batch 1 28 28"],
-        c: Float[torch.Tensor, "batch feature"]
+        c: Float[torch.Tensor, "batch feature"],
     ):
         """
         this method is used in training, so samples t and noise randomly
         """
 
         # t ~ Uniform(0, n_T)
-        _ts = torch.randint(1, self.n_T+1, (x.shape[0],)).to(self.device)
+        _ts = torch.randint(1, self.n_T + 1, (x.shape[0],)).to(self.device)
         noise = torch.randn_like(x)  # eps ~ N(0, 1)
 
         # This is the x_t, which is sqrt(alphabar) x_0 + sqrt(1-alphabar) * eps
@@ -255,8 +264,7 @@ class DDPM(nn.Module):
 
         # return MSE between added noise, and our predicted noise
         return self.loss_mse(
-            noise,
-            self.nn_model(x_t, c, _ts / self.n_T, context_mask)
+            noise, self.nn_model(x_t, c, _ts / self.n_T, context_mask)
         )
 
     def sample(
@@ -264,7 +272,7 @@ class DDPM(nn.Module):
         context: Float[torch.Tensor, "batch feature"],
         n_sample: int,
         size: tuple,
-        device: str
+        device: str,
     ):
         """Generate images guided by the context.
 
@@ -302,7 +310,7 @@ class DDPM(nn.Module):
         x_i_store = []  # keep track of generated steps for plotting
         print()
         for i in range(self.n_T, 0, -1):
-            print(f'sampling timestep {i}', end='\r')
+            print(f"sampling timestep {i}", end="\r")
             t_is = torch.tensor([i / self.n_T]).to(device)
             t_is = t_is.repeat(batch_size, 1, 1, 1)
 
@@ -327,3 +335,36 @@ class DDPM(nn.Module):
 
         x_i_store = np.array(x_i_store)
         return x_i, x_i_store
+
+
+def load_ddpm(
+    path: Path,
+    n_classes: int,
+    hidden_size: Optional[int] = None,
+    n_T: Optional[int] = None,
+    drop_prob: Optional[float] = None,
+    device: Optional[str] = None,
+    opts: Optional[SimpleNamespace] = None,
+):
+    # Ugly workaround for the fact that the simplenamespace
+    # does not yet be a dictionary.
+    hidden_size = hidden_size if hidden_size else opts.hidden_size
+    n_T = n_T if n_T else opts.n_T
+    drop_prob = drop_prob if drop_prob else opts.drop_prob
+    device = device if device else opts.device
+
+    ddpm = DDPM(
+        nn_model=ContextUnet(
+            in_channels=1, hidden_size=hidden_size, n_classes=n_classes
+        ),
+        betas=(1e-4, 0.02),
+        n_T=n_T,
+        device=device,
+        drop_prob=drop_prob,
+    )
+    ddpm.to(device)
+    ddpm.load_state_dict(
+        torch.load(path)
+    )  # "./data/diffusion_outputs/ddpm_unet01_mnist_9.pth"))
+    ddpm.to(device)
+    return ddpm
