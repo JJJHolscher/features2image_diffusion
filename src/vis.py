@@ -1,7 +1,12 @@
 #! /usr/bin/env python3
 # vim:fenc=utf-8
 
+from jaxtyping import Float
+from jo3mnist.vis import to_img
 import torch
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 def old_evaluation_section():
     n_sample = 4*n_classes
@@ -41,3 +46,29 @@ def old_evaluation_section():
             ani.save(save_dir + f"gif_ep{ep}_w{w}.gif", dpi=100, writer=PillowWriter(fps=5))
             print('saved image at ' + save_dir + f"gif_ep{ep}_w{w}.gif")
 
+
+def tabulate_generations(
+    generations: Float[np.ndarray, "num_generations 28 28"],
+    original_img=None
+):
+    # Determine the shape of the table of images.
+    num_images = len(generations)
+    if original_img is not None:
+        num_images += 1
+    rows = int(np.sqrt(num_images))
+    cols = num_images // rows
+    if rows * cols < num_images:
+        cols += 1
+    fig, axs = plt.subplots(rows, cols, facecolor="gray")
+
+    # Place the images in the table.
+    for i, generation in enumerate(generations):
+        r = i // cols
+        c = i % cols
+        axs[r, c].imshow(to_img(generation))
+        axs[r, c].set_axis_off()
+    if original_img is not None:
+        axs[-1, -1].imshow(to_img(original_img))
+        axs[-1, -1].set_axis_off()
+
+    return fig, axs

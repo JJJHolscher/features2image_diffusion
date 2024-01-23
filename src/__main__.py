@@ -23,12 +23,14 @@ from jaxtyping import Float
 from jo3mnist.vis import to_img
 from jo3util.root import run_dir as jo3run_dir
 from matplotlib.animation import FuncAnimation, PillowWriter
+import tomli_w
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image
 from tqdm import tqdm
 
 from .data import load_mnist_with_features
+from .eval import generate_on_edits
 from .unet import DDPM, ContextUnet
 
 
@@ -285,18 +287,33 @@ def train(
 
 if __name__ == "__main__":
     O = argtoml.parse_args()
-    for RUN in O.run:
+    for RUN in O["train"]:
         RUN_DIR = jo3run_dir(RUN)
         if not RUN_DIR.exists():
             RUN_DIR.mkdir()
-            argtoml.save(O, RUN_DIR / "config.toml")
-            argtoml.save(RUN, RUN_DIR / "hyparam.toml")
+            with open(RUN_DIR / "config.toml", "wb") as f:
+                tomli_w.dump(O, f)
+            with open(RUN_DIR / "hyparam.toml", "wb") as f:
+                tomli_w.dump(RUN, f)
         train(
-            RUN.feature_dir,
-            O.mnist_dir,
+            RUN["feature_dir"],
+            O["mnist_dir"],
             run_dir=RUN_DIR,
-            n_epoch=RUN.epochs,
-            hidden_size=RUN.hidden_size,
-            batch_size=RUN.batch_size,
-            drop_prob=RUN.drop_prob,
+            n_epoch=RUN["epochs"],
+            hidden_size=RUN["hidden_size"],
+            batch_size=RUN["batch_size"],
+            drop_prob=RUN["drop_prob"],
         )
+
+    with torch.no_grad():
+        for RUN in O["eval"]:
+            RUN_DIR = jo3run_dir(RUN)
+            RUN_DIR.mkdir()
+            with open(RUN_DIR / "config.toml", "wb") as f:
+                tomli_w.dump(O, f)
+            generate_on_edits(
+                out_dir=RUN_DIR,
+                mnist_dir=O["mnist_dir"],
+                device=O["device"],
+                **RUN
+            )

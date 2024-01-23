@@ -5,10 +5,15 @@ from pathlib import Path
 from typing import Tuple, Union
 
 import numpy as np
+import pandas as pd
 import torchvision
+from tqdm import tqdm
+from jo3mnist.vis import to_img
 from jo3util.warning import todo
+import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import MNIST
+
 
 
 class MnistFeaturesSet(Dataset):
@@ -63,3 +68,35 @@ def load_mnist_with_features(
     )
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=shuffle)
     return train_loader, test_loader
+
+
+def loader_to_dataframe(data_loader, img_dir="./res/mnist/img"):
+    data_len = len(data_loader)
+    img_dir = Path(img_dir)
+    if not img_dir.exists():
+        print("[0/1] storing mnist images")
+        img_dir.mkdir(parents=True, exist_ok=True)
+        iterator = tqdm(enumerate(data_loader), total=data_len)
+        for i, (_, images, _) in iterator:
+            for j, img in enumerate(images):
+                index = i * len(images) + j
+                to_img(img).save(img_dir / f"{index}.png")
+
+    # Empty the data_loader iterator into tensors.
+    print("[1/1] loading features and labels")
+    all_features = []
+    all_labels = []
+    iterator = tqdm(enumerate(data_loader), total=data_len)
+    for i, (features, _, labels) in iterator:
+        all_features.append(torch.Tensor(features))
+        all_labels.append(torch.Tensor(labels))
+
+    dataframe = {"label": torch.concatenate(all_labels)}
+
+    # Create a column per feature.
+    all_features = torch.concatenate(all_features)
+    feature_len = all_features.shape[-1]
+    for f in range(feature_len):
+        dataframe[f"f{f}"] = all_features[:, f]
+
+    return pd.DataFrame(dataframe)

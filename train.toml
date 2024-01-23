@@ -1,0 +1,17 @@
+
+device = "cuda:0"
+mnist_dir = "./res/mnist"
+
+[[train]]
+feature_dir = "../sparse_autoencoder/run/171d21f725b8721bc98f2d334b103d6b0e83570a958c461866fd12c6280a670f"
+
+epochs = 23
+batch_size = 64
+diffusion_steps = 400
+hidden_size = 256
+lr = 1e-4
+
+# Consider leaving the drop_prob at 0 or at 1 / feature_size.
+# I think the code assumes that features that are all zero are unconditional,
+# but I don't want to make that assumption.
+drop_prob = 0.0

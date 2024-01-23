@@ -25,7 +25,6 @@ from typing import Optional
 import numpy as np
 import torch
 import torch.nn as nn
-from argtoml import SimpleNamespace
 from jaxtyping import Float
 
 
@@ -271,8 +270,10 @@ class DDPM(nn.Module):
         self,
         context: Float[torch.Tensor, "batch feature"],
         n_sample: int,
-        size: tuple,
+        size: tuple,  # usually (1, 28, 28)
         device: str,
+        verbose: bool = True,
+        store: bool = True
     ):
         """Generate images guided by the context.
 
@@ -287,7 +288,8 @@ class DDPM(nn.Module):
         Args:
             context: features that guide the model during generation
             n_sample: the number of generations per feature
-            size: shape of a single data point
+            size: shape of a single data point, in the case of mnist this
+                is (1, 28, 28).
             device: the device (cpu, gpu, tpu) to run the matrix operations on
             guide_w: how much the context influences the generations
         """
@@ -308,9 +310,11 @@ class DDPM(nn.Module):
         # context_mask[batch_size:] = 1.  # makes second half of batch context free
 
         x_i_store = []  # keep track of generated steps for plotting
-        print()
+        if verbose:
+            print()
         for i in range(self.n_T, 0, -1):
-            print(f"sampling timestep {i}", end="\r")
+            if verbose:
+                print(f"sampling timestep {i}", end="\r")
             t_is = torch.tensor([i / self.n_T]).to(device)
             t_is = t_is.repeat(batch_size, 1, 1, 1)
 
@@ -330,7 +334,7 @@ class DDPM(nn.Module):
                 self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
                 + self.sqrt_beta_t[i] * z
             )
-            if i % 20 == 0 or i == self.n_T or i < 8:
+            if store and (i % 20 == 0 or i == self.n_T or i < 8):
                 x_i_store.append(x_i.detach().cpu().numpy())
 
         x_i_store = np.array(x_i_store)
@@ -340,27 +344,18 @@ class DDPM(nn.Module):
 def load_ddpm(
     path: Path,
     n_classes: int,
-    hidden_size: Optional[int] = None,
-    n_T: Optional[int] = None,
-    drop_prob: Optional[float] = None,
-    device: Optional[str] = None,
-    opts: Optional[SimpleNamespace] = None,
+    hidden_size: int,
+    diffusion_steps: int,
+    device: str,
 ):
-    # Ugly workaround for the fact that the simplenamespace
-    # does not yet be a dictionary.
-    hidden_size = hidden_size if hidden_size else opts.hidden_size
-    n_T = n_T if n_T else opts.n_T
-    drop_prob = drop_prob if drop_prob else opts.drop_prob
-    device = device if device else opts.device
-
     ddpm = DDPM(
         nn_model=ContextUnet(
             in_channels=1, hidden_size=hidden_size, n_classes=n_classes
         ),
         betas=(1e-4, 0.02),
-        n_T=n_T,
+        n_T=diffusion_steps,
         device=device,
-        drop_prob=drop_prob,
+        drop_prob=0.0,
     )
     ddpm.to(device)
     ddpm.load_state_dict(

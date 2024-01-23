@@ -12,3 +12,5 @@ tqdm
 twine
 typeguard
 git+https://github.com/JJJHolscher/jupytools
+pandas
+tomli_w
