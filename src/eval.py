@@ -93,6 +93,7 @@ def generate_and_save(
     np.save(path + "-features.npy", features.numpy())
     np.save(path + "-generations.npy", generations)
     plt.savefig(path + "-images.png")
+    plt.close()
 
 
 def generate(
