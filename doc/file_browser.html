@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+	<head>
+    <script type="module">
+      import init, { file_browser } from '/pkg/feature2image_diffusion_dioxus_widgets.js';
+      window.file_browser = file_browser
+      async function main() {
+        await init();
+        file_browser(document.getElementById("file_browser"));
+      }
+      main();
+    </script>
+	</head>
+  <body>
+    <div id="file_browser"></div>
+  </body>
+</html>
