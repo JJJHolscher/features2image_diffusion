@@ -28,14 +28,13 @@ impl DioxusInElement for FileBrowser {
 
 
         cx.render(rsx!({
-            files.read().path_names.iter().map(|full_path: &String| {
-                let full_path: String = full_path.clone();
-                let path: String = full_path.split('/').last().unwrap_or(full_path.as_str()).to_owned();
+            files.read().path_names.iter().map(|path: &String| {
+                let path = path.clone();
                 if path.contains('.') {
                     rsx!(h1 { "{path}" })
                 } else {
                     rsx!(button {
-                        onclick: move |_| {files.write().enter_dir(&full_path)},
+                        onclick: move |_| {files.write().enter_dir(&path)},
                         "{path}"
                     })
                 }
@@ -67,9 +66,13 @@ impl Files {
 
     fn reload_path_list(&mut self) {
         self.path_names.clear();
+        let len = self.current_directory.len();
         for path in &self.all_paths {
             if path.starts_with(&self.current_directory) {
-                self.path_names.push(path.to_string());
+                let tail = &path[len..];
+                if !tail.contains("/") {
+                    self.path_names.push(tail.to_string());
+                }
             }
         }
     }
@@ -93,7 +96,7 @@ impl Files {
     }
 
     fn enter_dir(&mut self, path: &str) {
-        self.current_directory = path.to_string();
+        self.current_directory = format!("{}{}/", self.current_directory, path);
         self.reload_path_list();
     }
 

@@ -67,7 +67,7 @@ impl Iterator for FileIterator {
 
 fn main() -> std::io::Result<()> {
     let project_dir = std::env::current_dir().unwrap();
-    let root_path = "run/4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa/0";
+    let root_path = "run/4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa";
     set_current_dir(Path::new(root_path))?;
     dbg!(fs::read_dir(std::env::current_dir().unwrap()));
     let file_paths: Vec<PathBuf> = FileIterator::new("./").collect();
