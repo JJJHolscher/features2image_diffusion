@@ -50,11 +50,9 @@ impl Iterator for FileIterator {
                     entry.ok().and_then(|e| {
                         let path = e.path();
                         if path.is_dir() {
-                            self.dirs.push(path);
-                            None
-                        } else {
-                            Some(path)
+                            self.dirs.push(path.clone());
                         }
+                        Some(path)
                     })
                 })
                 .collect::<Vec<_>>()

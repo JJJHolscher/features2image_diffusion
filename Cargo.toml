@@ -10,10 +10,9 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 jupyter-and-dioxus = { git = "https://github.com/JJJHolscher/jupyter-and-dioxus" }
 chrono = { version = "0.4.33", features = ["serde"] }
-dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "dc5e4e3738ac80cb3e333a10340674b575c95abd" }
-dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", rev = "dc5e4e3738ac80cb3e333a10340674b575c95abd" }
-dioxus-web = { git = "https://github.com/DioxusLabs/dioxus", rev = "dc5e4e3738ac80cb3e333a10340674b575c95abd" }
-dioxus-signals = { git = "https://github.com/DioxusLabs/dioxus", rev = "dc5e4e3738ac80cb3e333a10340674b575c95abd" }
+dioxus = "0.4.3"
+dioxus-core = "0.4.3"
+dioxus-web = "0.4.3"
 serde = "1.0.196"
 serde_json = "1.0.113"
 wasm-bindgen = "0"

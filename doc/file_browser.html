@@ -3,7 +3,6 @@
 	<head>
     <script type="module">
       import init, { file_browser } from '/pkg/feature2image_diffusion_dioxus_widgets.js';
-      window.file_browser = file_browser
       async function main() {
         await init();
         file_browser(document.getElementById("file_browser"));
@@ -12,6 +11,6 @@
     </script>
 	</head>
   <body>
-    <div id="file_browser"></div>
+    <div id="file_browser">pre-existing stuff</div>
   </body>
 </html>
