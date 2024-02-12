@@ -15,7 +15,6 @@ crate-type = ["rlib", "cdylib"]
 jupyter-and-dioxus = { git = "https://github.com/JJJHolscher/jupyter-and-dioxus" }
 chrono = { version = "0.4.33", features = ["serde"] }
 dioxus = "0.4.3"
-dioxus-core = "0.4.3"
 dioxus-web = "0.4.3"
 serde = "1.0.196"
 serde_json = "1.0.113"

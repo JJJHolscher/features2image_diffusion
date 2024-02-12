@@ -2,21 +2,15 @@
 
 use core::ops::Deref;
 use dioxus::prelude::*;
-use jupyter_and_dioxus::DioxusInElement;
+// use jupyter_and_dioxus::DioxusInElement;
 use serde_json;
 use web_sys::HtmlElement;
-
-#[cfg(not(feature = "collect-assets"))]
-const _STYLE: &str = include_str!("../res/fileexplorer.css");
-
-#[cfg(feature = "collect-assets")]
-const _STYLE: &str = manganis::mg!(file("./res/fileexplorer.css"));
 
 pub struct FileBrowser {
     inner_text: String,
 }
 
-impl DioxusInElement for FileBrowser {
+impl FileBrowser {
     fn new(root: &HtmlElement) -> Self {
         let inner_text = root.inner_text();
         root.set_inner_html("");
@@ -27,19 +21,30 @@ impl DioxusInElement for FileBrowser {
         let files = use_ref(cx, Files::new);
 
 
-        cx.render(rsx!({
+        render!({
             files.read().path_names.iter().map(|path: &String| {
                 let path = path.clone();
                 if path.contains('.') {
-                    rsx!(h1 { "{path}" })
+                    rsx!(h2 { 
+                        class: "",
+                        "{path}" 
+                    })
                 } else {
-                    rsx!(button {
+                    rsx!( button {
                         onclick: move |_| {files.write().enter_dir(&path)},
                         "{path}"
                     })
                 }
             })
-        }))
+        })
+    }
+
+    pub fn launch(root: &HtmlElement) {
+        dioxus_web::launch_with_props(
+            Self::component,
+            Self::new(root),
+            dioxus_web::Config::new().rootname(root.id())
+        );
     }
 }
 
