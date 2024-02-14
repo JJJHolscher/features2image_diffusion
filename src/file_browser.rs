@@ -21,21 +21,16 @@ impl FileBrowser {
         let files = use_ref(cx, Files::new);
 
 
-        render!({
-            files.read().path_names.iter().map(|path: &String| {
-                let path = path.clone();
-                if path.contains('.') {
-                    rsx!(h2 { 
-                        class: "",
-                        "{path}" 
-                    })
-                } else {
-                    rsx!( button {
-                        onclick: move |_| {files.write().enter_dir(&path)},
-                        "{path}"
-                    })
-                }
-            })
+        render!( div {
+            display: "flex",
+            div {
+                flex_basis: "100%",
+                FileList {},
+            },
+            div {
+                flex_basis: "100%",
+                FilePreview {},
+            },
         })
     }
 
@@ -47,6 +42,38 @@ impl FileBrowser {
         );
     }
 }
+
+
+#[component]
+fn FilePreview(cx: Scope) -> Element {
+    render!(
+        "hello"
+    )
+}
+
+
+#[component]
+fn FileList(cx: Scope) -> Element {
+    let files = use_ref(cx, Files::new);
+
+    render!({
+        files.read().path_names.iter().map(|path: &String| {
+            let path = path.clone();
+            if path.contains('.') {
+                rsx!(h2 { 
+                    class: "",
+                    "{path}" 
+                })
+            } else {
+                rsx!( button {
+                    onclick: move |_| {files.write().enter_dir(&path)},
+                    "{path}"
+                })
+            }
+        })
+    })
+}
+
 
 struct Files {
     all_paths: Vec<String>,
