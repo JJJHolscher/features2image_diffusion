@@ -1,6 +1,4 @@
-const withMT = require("@material-tailwind/html/utils/withMT");
- 
-module.exports = withMT({
+module.exports = {
     mode: "all",
     content: [
         // include all rust, html and css files in the src directory
@@ -8,10 +6,18 @@ module.exports = withMT({
         // include all html files in the output (dist) directory
         "*.html",
         "doc/*.html",
-        "web/**/*.html",
+        "out/**/*.html",
+        "out/*.html",
     ],
     theme: {
-        extend: {},
+        extend: {
+            gridTemplateColumns: {
+                'auto': 'repeat(auto-fit, minmax(100px, 1fr))',
+            },
+            gridAutoRows: {
+                '20': '20px',
+            }
+        },
     },
     plugins: [],
-});
+};
