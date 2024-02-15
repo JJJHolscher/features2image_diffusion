@@ -7,7 +7,7 @@ use serde_json;
 use web_sys::HtmlElement;
 
 pub struct FileBrowser {
-    inner_text: String,
+    pub inner_text: String,
 }
 
 impl FileBrowser {
@@ -17,18 +17,18 @@ impl FileBrowser {
         FileBrowser { inner_text }
     }
 
-    fn component(cx: Scope<FileBrowser>) -> Element {
-        let files = use_ref(cx, Files::new);
-
-
+    pub fn component(cx: Scope<FileBrowser>) -> Element {
+        use_shared_state_provider(cx, Files::new);
+        use_shared_state_provider(cx, || SelectedFile { path : None } );
         render!( div {
-            display: "flex",
+            class: "flex",
             div {
-                flex_basis: "100%",
+                class: "w-1/2",
+                FolderList {},
                 FileList {},
             },
             div {
-                flex_basis: "100%",
+                class: "w-1/2",
                 FilePreview {},
             },
         })
@@ -44,33 +44,74 @@ impl FileBrowser {
 }
 
 
+struct SelectedFile {
+    path: Option<String>
+}
+
+
 #[component]
 fn FilePreview(cx: Scope) -> Element {
-    render!(
-        "hello"
-    )
+    let files = use_shared_state::<Files>(cx).unwrap();
+    let selected_file = use_shared_state::<SelectedFile>(cx).unwrap();
+
+    match &selected_file.read().path {
+        Some(path) => render!( embed {
+            class: "text-3xl",
+            src: "{files.read().current_directory}/{path}"
+        }),
+        None => render!( h2 {
+            class: "text-3xl",
+            "no selection"
+        })
+    }
 }
 
 
 #[component]
 fn FileList(cx: Scope) -> Element {
-    let files = use_ref(cx, Files::new);
+    let files = use_shared_state::<Files>(cx).unwrap();
+    let selected_file = use_shared_state::<SelectedFile>(cx).unwrap();
 
     render!({
-        files.read().path_names.iter().map(|path: &String| {
-            let path = path.clone();
-            if path.contains('.') {
-                rsx!(h2 { 
-                    class: "",
-                    "{path}" 
-                })
-            } else {
+        files.read().path_names.iter().filter(|p| p.contains('.')).map(|path: &String| {
+            let p = path.clone();
+            rsx!(button { 
+                class: "",
+                onclick: move |_| {
+                    selected_file.write().path = Some(p.to_owned());
+                },
+                "{path}" 
+            })
+        })
+    })
+}
+
+
+#[component]
+fn FolderList(cx: Scope) -> Element {
+    let files = use_shared_state::<Files>(cx).unwrap();
+
+    let button_list = rsx!({
+        files
+            .read()
+            .path_names
+            .iter()
+            .filter(|p| !p.contains('.'))
+            .map(|path: &String| {
+                let path = path.clone();
                 rsx!( button {
-                    onclick: move |_| {files.write().enter_dir(&path)},
+                    class: "",
+                    onclick: move |_| {
+                        files.write().enter_dir(&path)
+                    },
                     "{path}"
                 })
-            }
-        })
+            })
+    });
+
+    render!(div {
+        class: "grid grid-cols-10 auto-rows-min ",
+        { button_list }
     })
 }
 

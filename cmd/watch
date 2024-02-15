@@ -1,0 +1,11 @@
+#!/bin/bash
+
+trap ctrl_c INT
+
+ctrl_c () {
+    kill $(jobs -p) 2> /dev/null
+}
+
+brave --app=http://localhost:8080 &
+dx serve --platform web --hot-reload &
+tailwindcss -i ./src/input.css -o ./out/tailwind.css --watch
