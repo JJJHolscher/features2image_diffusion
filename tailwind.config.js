@@ -6,13 +6,13 @@ module.exports = {
         // include all html files in the output (dist) directory
         "*.html",
         "doc/*.html",
-        "out/**/*.html",
-        "out/*.html",
+        "web/**/*.html",
+        "web/*.html",
     ],
     theme: {
         extend: {
             gridTemplateColumns: {
-                'auto': 'repeat(auto-fit, minmax(100px, 1fr))',
+                'auto': 'repeat(auto-fit, minmax(50px, 1fr))',
             },
             gridAutoRows: {
                 '20': '20px',
