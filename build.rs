@@ -1,5 +1,5 @@
 use std::env::set_current_dir;
-use std::fs::{self, ReadDir};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::vec::IntoIter;
@@ -67,9 +67,9 @@ impl Iterator for FileIterator {
 
 fn main() -> std::io::Result<()> {
     let project_dir = std::env::current_dir().unwrap();
-    let root_path = "run/4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa";
+    let root_path = "run";
     set_current_dir(Path::new(root_path))?;
-    dbg!(fs::read_dir(std::env::current_dir().unwrap()));
+    dbg!(fs::read_dir(std::env::current_dir().unwrap()).unwrap());
     let file_paths: Vec<PathBuf> = FileIterator::new("./").collect();
     dbg!(&file_paths);
 
@@ -82,7 +82,7 @@ fn main() -> std::io::Result<()> {
     )
     .unwrap();
     set_current_dir(project_dir)?;
-    std::fs::File::create("src/files.json")?.write_all(serialized.as_bytes())?;
+    std::fs::File::create("pkg/files.json")?.write_all(serialized.as_bytes())?;
 
     Ok(())
 }

@@ -1,91 +1,84 @@
 // This code is mostly copied from the dioxus repo.
 
-use core::ops::Deref;
 use dioxus::prelude::*;
-// use jupyter_and_dioxus::DioxusInElement;
 use serde_json;
-use web_sys::HtmlElement;
 
-pub struct FileBrowser {
-    pub inner_text: String,
-}
-
-impl FileBrowser {
-    fn new(root: &HtmlElement) -> Self {
-        let inner_text = root.inner_text();
-        root.set_inner_html("");
-        FileBrowser { inner_text }
-    }
-
-    pub fn component(cx: Scope<FileBrowser>) -> Element {
-        use_shared_state_provider(cx, Files::new);
-        use_shared_state_provider(cx, || SelectedFile { path : None } );
-        render!( div {
-            class: "flex",
-            div {
-                class: "w-1/2",
-                FolderList {},
-                FileList {},
-            },
-            div {
+#[component]
+pub fn FileBrowser(cx: Scope) -> Element {
+    use_shared_state_provider(cx, Files::new);
+    use_shared_state_provider(cx, || SelectedFile { path: None });
+    let selected_file = use_shared_state::<SelectedFile>(cx).unwrap();
+    render!( div {
+        class: "flex",
+        div {
+            class: "flex-1",
+            FolderList {},
+            FileList {},
+        },
+        {match &selected_file.read().path {
+            Some(_) => rsx!( div {
                 class: "w-1/2",
                 FilePreview {},
-            },
-        })
-    }
-
-    pub fn launch(root: &HtmlElement) {
-        dioxus_web::launch_with_props(
-            Self::component,
-            Self::new(root),
-            dioxus_web::Config::new().rootname(root.id())
-        );
-    }
+            }),
+            None => rsx!(div { class: "hidden" })
+        }}
+    })
 }
-
 
 struct SelectedFile {
-    path: Option<String>
+    path: Option<String>,
 }
-
 
 #[component]
 fn FilePreview(cx: Scope) -> Element {
-    let files = use_shared_state::<Files>(cx).unwrap();
     let selected_file = use_shared_state::<SelectedFile>(cx).unwrap();
 
-    match &selected_file.read().path {
-        Some(path) => render!( embed {
-            class: "text-3xl",
-            src: "{files.read().current_directory}/{path}"
-        }),
-        None => render!( h2 {
-            class: "text-3xl",
-            "no selection"
-        })
-    }
+    render!({
+        match &selected_file.read().path {
+            Some(path) => rsx!(embed {
+                class: "max-w-full",
+                src: "{path}"
+            }),
+            None => rsx!( h2 {
+                class: "text-3xl",
+                "weird, you shouldn't see this text"
+            }),
+        }
+    })
 }
-
 
 #[component]
 fn FileList(cx: Scope) -> Element {
     let files = use_shared_state::<Files>(cx).unwrap();
     let selected_file = use_shared_state::<SelectedFile>(cx).unwrap();
 
-    render!({
-        files.read().path_names.iter().filter(|p| p.contains('.')).map(|path: &String| {
-            let p = path.clone();
-            rsx!(button { 
-                class: "",
-                onclick: move |_| {
-                    selected_file.write().path = Some(p.to_owned());
-                },
-                "{path}" 
+    let rendered_files = rsx!({
+        files
+            .read()
+            .path_names
+            .iter()
+            .filter(|p| p.contains('.'))
+            .map(|path: &String| {
+                let p = path.clone();
+                rsx!(button {
+                    class: "m-1 p-1 bg-sky-500 rounded",
+                    onclick: move |_| {
+                        selected_file.write().path = Some(format!(
+                            "{}/{}",
+                            files.read().current_directory,
+                            p
+                        ));
+                    },
+                    "{path}"
+                })
             })
-        })
+    });
+
+    render!(div {
+        class: "inline-flex flex-wrap",
+        { rendered_files }
     })
 }
-
 
 #[component]
 fn FolderList(cx: Scope) -> Element {
@@ -100,7 +93,7 @@ fn FolderList(cx: Scope) -> Element {
             .map(|path: &String| {
                 let path = path.clone();
                 rsx!( button {
-                    class: "",
+                    class: "truncate bg-indigo-500 m-1 p-1 rounded-lg",
                     onclick: move |_| {
                         files.write().enter_dir(&path)
                     },
@@ -110,11 +103,10 @@ fn FolderList(cx: Scope) -> Element {
     });
 
     render!(div {
-        class: "grid grid-cols-10 auto-rows-min ",
+        class: "grid grid-cols-auto",
         { button_list }
     })
 }
-
 
 struct Files {
     all_paths: Vec<String>,
@@ -126,14 +118,13 @@ struct Files {
 impl Files {
     fn new() -> Self {
         let mut files = Self {
-            all_paths: serde_json::from_str(include_str!("files.json")).unwrap(),
+            all_paths: serde_json::from_str(include_str!("../pkg/files.json")).unwrap(),
             current_directory: "./".to_string(),
             path_names: vec![],
             err: None,
         };
 
         files.reload_path_list();
-
         files
     }
 
@@ -154,16 +145,22 @@ impl Files {
         if self.current_directory != "./" {
             let mut slash = false;
             // Trim all characters after the last slash.
-            self.current_directory = self.current_directory.chars().into_iter().rev().filter(|c| {
-                if !slash {
-                    if *c == '/' {
-                        slash = true;
+            self.current_directory = self
+                .current_directory
+                .chars()
+                .into_iter()
+                .rev()
+                .filter(|c| {
+                    if !slash {
+                        if *c == '/' {
+                            slash = true;
+                        }
+                        false
+                    } else {
+                        true
                     }
-                    false
-                } else {
-                    true
-                }
-            }).collect();
+                })
+                .collect();
             self.reload_path_list();
         }
     }
