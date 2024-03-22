@@ -1,0 +1,14 @@
+{
+  "name": "features2image_diffusion-dioxus-widgets",
+  "version": "0.0.1",
+  "files": [
+    "features2image_diffusion_dioxus_widgets_bg.wasm",
+    "features2image_diffusion_dioxus_widgets.js",
+    "features2image_diffusion_dioxus_widgets.d.ts"
+  ],
+  "module": "features2image_diffusion_dioxus_widgets.js",
+  "types": "features2image_diffusion_dioxus_widgets.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
