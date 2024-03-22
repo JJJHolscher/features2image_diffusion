@@ -22,6 +22,7 @@ struct Arguments {
 }
 
 
+
 impl Arguments {
     fn to_index(&self, exclude: Option<&SelectedParameter>) -> Vec<Argument> {
         match exclude {
@@ -41,15 +42,15 @@ impl Arguments {
     }
 
     fn set(&mut self, parameter: &SelectedParameter, file: &File) {
-        match parameter {
-            &SelectedParameter::Data => {
-                self.data = file.data.clone();
+        match *parameter {
+            SelectedParameter::Data => {
+                self.data = file.data;
             },
-            &SelectedParameter::Feature => {
-                self.feature = file.feature.clone();
+            SelectedParameter::Feature => {
+                self.feature = file.feature;
             },
-            &SelectedParameter::Modification => {
-                self.modification = file.modification.clone();
+            SelectedParameter::Modification => {
+                self.modification = file.modification;
             }
         }
     }
@@ -58,17 +59,16 @@ impl Arguments {
 #[component]
 pub fn FeatureImages() -> Element {
     // Track the selected arguments.
-    use_context_provider(Arguments::default);
-    use_context_provider(|| SelectedParameter::Data);
+    let selection = use_signal(|| SelectedParameter::Data);
+    let args = use_signal(Arguments::default);
 
-    let mut args: Arguments = use_context().unwrap();
-    let mut selection: SelectedParameter = use_context().unwrap();
+    let files: Files = use_context();
 
-    let [num_data, num_features, num_modifs, _] = pathor.dfmt.shape() else { todo!{} };
+    let [_num_data, _num_features, _num_modifs, _] = files.dfmt.shape() else { todo!{} };
 
-    let mut index = args.read().deref().to_index(None);
+    let mut index = args.read().to_index(None);
     index.push(Argument::FileType("images.png".to_owned()));
-    let img_path = &pathor.get(&index)[0].path;
+    let img_path = &files.get(&index)[0].path;
 
     rsx!(div {
         class: "flex flex-col justify-center",
@@ -76,17 +76,14 @@ pub fn FeatureImages() -> Element {
             class: "",
             src: "/run/{img_path}"
         }
-        SelectParameter{}
-        SelectArgument{}
+        SelectParameter{ selection, args }
+        SelectArgument{ selection, args }
     })
 }
 
 #[component]
-fn SelectParameter() -> Element {
-    let files: Files = use_context().unwrap();
-    let mut args: Arguments = use_context().unwrap();
-    let mut selection: SelectedParameter = use_context().unwrap();
-    render!(div {
+fn SelectParameter(selection: Signal<SelectedParameter>, args: Signal<Arguments>) -> Element {
+    rsx!(div {
         class: "",
 
         button {
@@ -116,30 +113,30 @@ fn SelectParameter() -> Element {
 }
 
 #[component]
-fn SelectArgument() -> Element {
-    let files: Files = use_context().unwrap();
-    let selection: SelectedParameter = use_context().unwrap();
-    let mut args: Arguments = use_context().unwrap();
-    let options = files.get(&args.read().to_index(Some(selection.read().deref())));
+fn SelectArgument(selection: Signal<SelectedParameter>, args: Signal<Arguments>) -> Element {
+    let files: Files = use_context();
+    // let selection: SelectedParameter = use_context();
+    // let mut args: Arguments = use_context();
+    let options = files.get(&args.read().to_index(Some(&selection.read())));
     let mut added_options = HashSet::<u16>::new();
-    render!(div {
+    rsx!(div {
         class: "grid grid-cols-10",
         {
             options
                 .iter()
                 .filter_map(|file: &File| {
                     let file = file.clone();
-                    let option = match selection.read().deref() {
-                        &SelectedParameter::Data => file.data,
-                        &SelectedParameter::Feature => file.feature,
-                        &SelectedParameter::Modification => file.modification,
+                    let option = match *selection.read() {
+                        SelectedParameter::Data => file.data,
+                        SelectedParameter::Feature => file.feature,
+                        SelectedParameter::Modification => file.modification,
                     };
                     if added_options.contains(&option) { None } else {
-                        added_options.insert(option.clone());
+                        added_options.insert(option);
                         Some(rsx!( button {
                             class: "truncate bg-indigo-500 m-1 p-1 rounded-lg",
                             onclick: move |_| {
-                                args.write().set(selection.read().deref(), &file);
+                                args.write().set(&selection.read(), &file);
                             },
                             "{option}"
                         }))
