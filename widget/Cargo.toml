@@ -1,0 +1,32 @@
+[package]
+name = "features2image_diffusion-widget"
+version = "0.0.1"
+edition = "2021"
+include = [
+    "src/*.rs",
+    "Cargo.toml"
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+# chrono = { version = "0.4.33", features = ["serde"] }
+dioxus = "0.5.0-alpha.2"
+dioxus-web = "0.5.0-alpha.2"
+serde = { version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+wasm-bindgen = "*"
+web-sys = { version = "0.3", features = ["HtmlElement", "Element", "Node"] }
+# dioxus-router = "0.5.0-alpha.2"
+# serde_qs = "0.12.0"
+# itertools = "0.12.1"
+# collect_slice = "1.2.0"
+console_log = "1.0"
+log = "0.4"
+tao-log = "1.0"
+proc-macro2 = "1"
+# ndarray = "0.15.6"
+# strum = { version = "0.26.1", features = ["derive"] }
+features2image_diffusion-read-result = { path = "../read-result" }

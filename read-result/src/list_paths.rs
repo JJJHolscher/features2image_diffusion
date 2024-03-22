@@ -1,6 +1,5 @@
-use std::env::set_current_dir;
+use std::env::{set_current_dir, current_dir};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::vec::IntoIter;
 
@@ -36,53 +35,33 @@ impl Iterator for FileIterator {
                 None => return None, // No more directories to visit
             };
 
-            dbg!(&next_dir);
-
             let entries = match fs::read_dir(&next_dir) {
                 Ok(entries) => entries,
                 Err(_) => continue, // Skip directories we can't read
             };
 
-            dbg!(&entries);
-
             let files = entries
                 .filter_map(|entry| {
-                    entry.ok().and_then(|e| {
+                    entry.ok().map(|e| {
                         let path = e.path();
                         if path.is_dir() {
                             self.dirs.push(path.clone());
                         }
-                        Some(path)
+                        path
                     })
                 })
                 .collect::<Vec<_>>()
                 .into_iter();
-
-            dbg!(&files);
 
             self.current_entries = Some(files);
         }
     }
 }
 
-fn main() -> std::io::Result<()> {
-    let project_dir = std::env::current_dir().unwrap();
-    let root_path = "run";
-    set_current_dir(Path::new(root_path))?;
-    dbg!(fs::read_dir(std::env::current_dir().unwrap()).unwrap());
-    let file_paths: Vec<PathBuf> = FileIterator::new("./").collect();
-    dbg!(&file_paths);
-
-    // Serialize and write to file as before
-    let serialized = serde_json::to_string(
-        &file_paths
-            .iter()
-            .map(|p| p.to_string_lossy().into_owned())
-            .collect::<Vec<String>>(),
-    )
-    .unwrap();
-    set_current_dir(project_dir)?;
-    std::fs::File::create("pkg/files.json")?.write_all(serialized.as_bytes())?;
-
-    Ok(())
+pub fn list_paths<P: AsRef<Path>>(root_dir: P) -> std::io::Result<Vec<PathBuf>> {
+    let orig_dir = current_dir()?;
+    set_current_dir(&root_dir)?;
+    let paths = FileIterator::new("./").collect();
+    set_current_dir(orig_dir)?;
+    Ok(paths)
 }

@@ -1,5 +1,6 @@
 project:
   type: website
   output-dir: "../web"
-  post-render: "../quarto.sh post-render"
   resources: evcxr_pkg
+  preview:
+    port: 5790

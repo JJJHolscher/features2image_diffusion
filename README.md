@@ -1,12 +1,7 @@
-# README
+# FEATURES TO IMAGE DIFFUSION
 
-## files
+This git comprises 3 packages:
 
-______________________________________________________________________
-|.gitignore		|a list of unshared files|
-|makefile|dev tools for installing, publisizing etc.|
-|pyproject.toml	|project metadata|
-|requirements.txt |python dependencies|
-|setup.py|necessary for `pip install -e .`|
-|src/main.py|first file that gets called|
---------------------------------------------
+1. features2image_diffusion: a python package for training a diffusion model to reconstruct images while conditioned on features that were extracted from some activations of a model parsing the images.
+2. widget: wasm widgets made in rust with dioxus to look at the results
+3. read-result: rust code to ergonomize the process of looking up the file path of a specific result

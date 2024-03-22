@@ -1,6 +1,3 @@
-[submodule "Conditional_Diffusion_MNIST"]
-	path = Conditional_Diffusion_MNIST
-	url = https://github.com/TeaPearce/Conditional_Diffusion_MNIST
 [submodule "xyz"]
 	path = xyz
 	url = https://github.com/JJJHolscher/features2image_diffusion-xyz

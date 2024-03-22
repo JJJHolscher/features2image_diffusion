@@ -3,10 +3,10 @@ use std::collections::HashSet;
 use dioxus::prelude::*;
 
 use tao_log::{debugv, info};
-use crate::f2id_fs::{File, Files, Argument};
+use features2image_diffusion_read_result::f2id_fs::{File, Files, Argument};
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 enum SelectedParameter {
     Data,
     Feature,
@@ -14,7 +14,7 @@ enum SelectedParameter {
 }
 
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Arguments {
     pub data: u16,
     pub feature: u16,
@@ -56,37 +56,36 @@ impl Arguments {
 }
 
 #[component]
-pub fn FeatureImages(cx: Scope, run_id: String) -> Element {
-    let files = use_state(cx, || Files::new(run_id));
-
+pub fn FeatureImages() -> Element {
     // Track the selected arguments.
-    use_shared_state_provider(cx, Arguments::default);
-    use_shared_state_provider(cx, || SelectedParameter::Data);
+    use_context_provider(Arguments::default);
+    use_context_provider(|| SelectedParameter::Data);
 
-    let mut args = use_shared_state::<Arguments>(cx).unwrap();
-    let mut selection = use_shared_state::<SelectedParameter>(cx).unwrap();
+    let mut args: Arguments = use_context().unwrap();
+    let mut selection: SelectedParameter = use_context().unwrap();
 
-    let [num_data, num_features, num_modifs, _] = files.dfmt.shape() else { todo!{} };
+    let [num_data, num_features, num_modifs, _] = pathor.dfmt.shape() else { todo!{} };
 
     let mut index = args.read().deref().to_index(None);
     index.push(Argument::FileType("images.png".to_owned()));
-    let img_path = &files.get().get(&index)[0].path;
+    let img_path = &pathor.get(&index)[0].path;
 
-    render!(div {
+    rsx!(div {
         class: "flex flex-col justify-center",
         img {
             class: "",
             src: "/run/{img_path}"
         }
         SelectParameter{}
-        SelectArgument{files: files.get()}
+        SelectArgument{}
     })
 }
 
 #[component]
-fn SelectParameter(cx: Scope) -> Element {
-    let mut args = use_shared_state::<Arguments>(cx).unwrap();
-    let mut selection = use_shared_state::<SelectedParameter>(cx).unwrap();
+fn SelectParameter() -> Element {
+    let files: Files = use_context().unwrap();
+    let mut args: Arguments = use_context().unwrap();
+    let mut selection: SelectedParameter = use_context().unwrap();
     render!(div {
         class: "",
 
@@ -117,9 +116,10 @@ fn SelectParameter(cx: Scope) -> Element {
 }
 
 #[component]
-fn SelectArgument<'a>(cx: Scope, files: &'a Files) -> Element {
-    let selection = use_shared_state::<SelectedParameter>(cx).unwrap();
-    let mut args = use_shared_state::<Arguments>(cx).unwrap();
+fn SelectArgument() -> Element {
+    let files: Files = use_context().unwrap();
+    let selection: SelectedParameter = use_context().unwrap();
+    let mut args: Arguments = use_context().unwrap();
     let options = files.get(&args.read().to_index(Some(selection.read().deref())));
     let mut added_options = HashSet::<u16>::new();
     render!(div {
@@ -148,8 +148,3 @@ fn SelectArgument<'a>(cx: Scope, files: &'a Files) -> Element {
         }
     })
 }
-
-// #[component]
-// fn IdOptions(cx: Scope, parameter: String) -> Element {
-
-// }

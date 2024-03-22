@@ -1,15 +1,15 @@
 use std::collections::HashSet;
 use std::collections::HashMap;
 use std::mem::discriminant;
-use serde_json;
+use std::path::PathBuf;
 use itertools::Itertools;
-use tao_log::{debugv, info};
 use ndarray::prelude::*;
 use ndarray::Slice;
 use strum::{IntoEnumIterator, EnumIter};
+use serde::{Deserialize, Serialize};
 
 
-#[derive(Hash, EnumIter, PartialEq, std::cmp::Eq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Hash, EnumIter, PartialEq, std::cmp::Eq, Ord, PartialOrd, Clone, Debug, Serialize, Deserialize)]
 pub enum Argument {
     Data(u16),
     Feature(u16),
@@ -17,7 +17,7 @@ pub enum Argument {
     FileType(String)
 }
 
-#[derive(Clone, PartialEq, Default, Debug)]
+#[derive(Clone, PartialEq, Default, Debug, Serialize, Deserialize)]
 pub struct File {
     pub data: u16,
     pub feature: u16,
@@ -70,9 +70,8 @@ impl File {
 /// Index: The mapping of an Parameter's Argument to a location in the tensor.
 ///
 /// I should consider using fselect in the future
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
 pub struct Files {
-    pub run: String,
     pub arg2idx: HashMap<Argument, usize>,
     pub idx2arg: HashMap<Argument, Vec<Argument>>,
     pub dfmt: Array4<File>,
@@ -80,20 +79,13 @@ pub struct Files {
 
 
 impl Files {
-    pub fn new(run_id: &str) -> Self {
-        let paths: Vec<String> = serde_json::from_str(include_str!("../pkg/files.json")).unwrap();
-
-        // Accept "./path" and "path".
-        let run = if run_id.starts_with("./") {
-            run_id.to_owned()
-        } else {
-            format!("./{run_id}")
-        };
+    pub fn new(paths: Vec<PathBuf>) -> Self {
 
         // Collect all paths and their arguments.
         let mut all_arg: HashSet<Argument> = HashSet::new();
         let mut all = Vec::new();
-        for path in paths.into_iter().filter(|p| p.starts_with(&run)) {
+        for path in paths.into_iter() {
+            let path = path.into_os_string().into_string().unwrap();
             let Some((d, f, m, t)) = arguments_from_path(&path) else { continue };
             
             all.push((path, d.clone(), f.clone(), m.clone(), t.clone()));
@@ -102,7 +94,6 @@ impl Files {
             all_arg.insert(f);
             all_arg.insert(m);
             all_arg.insert(t);
-
         }
 
         // Map arguments to indices and vice-versa.
@@ -134,7 +125,6 @@ impl Files {
         }
 
         Self {
-            run,
             idx2arg,
             arg2idx,
             dfmt
@@ -177,7 +167,7 @@ impl Files {
 
 
 pub fn arguments_from_path(path: &str) -> Option<(Argument, Argument, Argument, Argument)> {
-    let (".", _, d, fmt) = path.splitn(4, '/').next_tuple()? else { todo!() };
+    let (".", d, fmt) = path.splitn(3, '/').next_tuple()? else { return None };
     let d = d.parse().ok()?;
     let (f, m, t) = match fmt.split_once('/') {
         // A valid path is either "./run/data/feature/modification-file_type"
@@ -187,7 +177,7 @@ pub fn arguments_from_path(path: &str) -> Option<(Argument, Argument, Argument, 
         },
         // or "./run/data/'unedited'-file_type".
         None => {
-            let ("unedited", t) = fmt.split_once('-')? else { todo!() };
+            let ("unedited", t) = fmt.split_once('-')? else { return None };
             Some((0, 0, t.to_owned()))
         }
     }?;
