@@ -1,6 +1,6 @@
 project:
   type: website
   output-dir: "../web"
-  resources: evcxr_pkg
-  preview:
-    port: 5790
+  # execute-dir: file
+  resources: ["*", "!*.ipynb", "!*.qmd", "!_*", "!.*"]
+  post-render: "../cmd/quarto.sh post-render"

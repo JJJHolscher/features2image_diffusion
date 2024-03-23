@@ -1,8 +1,23 @@
-
+## my idiosyncracies
 /tmp*
-/target/
-/log/
 /tags*
+
+/doc/**
+!/doc/**.ipynb
+!/doc/**.qmd
+!/doc/**.md
+!/doc/**.yml
+
+/web/**.rs
+/web/**/Cargo.*
+
+## quarto
+**.quarto/
+
+## rust
+target
+pkg
+dist
 
 ## python
 /build/
@@ -10,8 +25,8 @@
 /*.egg-info/
 /.venv/
 __pycache__
-**.egg-info/
-**.ipynb_checkpoints
+.egg-info
+.ipynb_checkpoints
 /Untitle*.ipynb
 
 /.quarto/

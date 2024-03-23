@@ -1,0 +1,12 @@
+{
+  "name": "ctx",
+  "version": "1.0.0",
+  "files": [
+    "ctx_bg.wasm",
+    "ctx.js"
+  ],
+  "module": "ctx.js",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

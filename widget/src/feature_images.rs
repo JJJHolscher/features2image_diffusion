@@ -63,6 +63,7 @@ pub fn FeatureImages() -> Element {
     let args = use_signal(Arguments::default);
 
     let files: Files = use_context();
+    let run_dir: String = use_context();
 
     let [_num_data, _num_features, _num_modifs, _] = files.dfmt.shape() else { todo!{} };
 
@@ -74,7 +75,7 @@ pub fn FeatureImages() -> Element {
         class: "flex flex-col justify-center",
         img {
             class: "",
-            src: "/run/{img_path}"
+            src: "{run_dir}/{img_path}"
         }
         SelectParameter{ selection, args }
         SelectArgument{ selection, args }

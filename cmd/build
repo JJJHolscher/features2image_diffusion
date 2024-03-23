@@ -1,3 +1,5 @@
 #!/bin/sh
-wasm-pack build --debug --target web
-tailwindcss -i ./src/input.css -o ./pkg/style.css
+
+tailwindcss -i widget/src/input.css -o web/tailwind.css
+cd doc
+quarto render --execute

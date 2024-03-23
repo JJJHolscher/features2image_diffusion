@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.3.450">
+<meta name="generator" content="quarto-1.4.551">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -22,7 +22,7 @@ ul.task-list li input[type="checkbox"] {
 }
 /* CSS for syntax highlighting */
 pre > code.sourceCode { white-space: pre; position: relative; }
-pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span { line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode > span { color: inherit; text-decoration: inherit; }
@@ -57,7 +57,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </style>
 
 
-<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
 <script src="site_libs/clipboard/clipboard.min.js"></script>
 <script src="site_libs/quarto-search/autocomplete.umd.js"></script>
 <script src="site_libs/quarto-search/fuse.min.js"></script>
@@ -78,7 +78,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   "collapse-after": 3,
   "panel-placement": "start",
   "type": "textbox",
-  "limit": 20,
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
   "language": {
     "search-no-results-text": "No results",
     "search-matching-documents-text": "matching documents",
@@ -87,13 +93,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "search-more-match-text": "more match in this document",
     "search-more-matches-text": "more matches in this document",
     "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
     "search-detached-cancel-button-title": "Cancel",
     "search-submit-button-title": "Submit",
     "search-label": "Search"
   }
 }</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" integrity="sha512-c3Nl8+7g4LMSTdrm621y7kf9v3SDPnhxLNhcjFJbKECVnmZHTdo+IRO05sNLTH/D3vA6u1X32ehoLC7WFVdheg==" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
+
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
@@ -112,361 +119,146 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 
-<div class="cell" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>cd ..</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>/home/jo3/p/features2image_diffusion</code></pre>
-</div>
-<div class="cell-output cell-output-stderr">
-<pre><code>/home/jo3/p/features2image_diffusion/.venv/lib/python3.11/site-packages/IPython/core/magics/osm.py:417: UserWarning: using dhist requires you to install the `pickleshare` library.
-  self.shell.db['dhist'] = compress_dhist(dhist)[-100:]</code></pre>
-</div>
-</div>
-<div class="cell" data-execution_count="2">
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> argtoml</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> torch</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Tuple</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jaxtyping <span class="im">import</span> Float</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jo3mnist.vis <span class="im">import</span> to_img</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> torch.utils.data <span class="im">import</span> DataLoader</span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> features2image_diffusion.__main__ <span class="im">import</span> evaluate</span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> features2image_diffusion.data <span class="im">import</span> load_mnist_with_features, loader_to_dataframe</span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> features2image_diffusion.unet <span class="im">import</span> load_ddpm</span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>np.set_printoptions(precision<span class="op">=</span><span class="dv">3</span>)</span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>RUN_PATH <span class="op">=</span> Path.cwd() <span class="op">/</span> <span class="st">"run/7927ad448cfdb96d1e819f599d5ce8a200a3de67068866289c8cf1e0215ec398"</span></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>O <span class="op">=</span> argtoml.parse_args(toml_path<span class="op">=</span>RUN_PATH <span class="op">/</span> <span class="st">"config.toml"</span>)</span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>RUN <span class="op">=</span> O.run[<span class="dv">0</span>]</span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>DEVICE <span class="op">=</span> <span class="st">"cuda"</span></span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"create the dataloader"</span>)</span>
-<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>TRAIN_LOADER, TEST_LOADER <span class="op">=</span> load_mnist_with_features(</span>
-<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    RUN.feature_dir, O.mnist_dir, RUN.batch_size, shuffle<span class="op">=</span><span class="va">False</span></span>
-<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"convert the loader to a dataframe"</span>)</span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>TRAIN_SET <span class="op">=</span> loader_to_dataframe(TRAIN_LOADER, img_dir<span class="op">=</span><span class="st">"./res/mnist/img"</span>)</span>
-<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>TRAIN_SET</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>create the dataloader
-convert the loader to a dataframe
-[1/2] loading labels
-[2/2] loading features</code></pre>
-</div>
-<div class="cell-output cell-output-stderr">
-<pre><code>/home/jo3/p/features2image_diffusion/.venv/lib/python3.11/site-packages/jo3util/warning.py:18: ToDoWarning: 'Make sure file names are numeric before the .npy.'
-  warnings.warn(msg, ToDoWarning)
-938it [00:15, 60.57it/s]
-100%|██████████| 256/256 [00:00&lt;00:00, 105186.31it/s]</code></pre>
-</div>
+
+<div id="630c31e2-cd77-4ad5-adf7-809835880667" class="cell" data-execution_count="1">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>wasm feature<span class="op">-</span>images</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep wasm<span class="op">-</span>bindgen <span class="op">=</span> <span class="st">"*"</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep features2image_diffusion<span class="op">-</span>widget <span class="op">=</span> <span class="op">{</span> path <span class="op">=</span> <span class="st">"../widget"</span> <span class="op">}</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep web<span class="op">-</span>sys <span class="op">=</span> <span class="op">{</span> version <span class="op">=</span> <span class="st">"*"</span><span class="op">,</span> features <span class="op">=</span> [<span class="st">"HtmlElement"</span>] <span class="op">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">wasm_bindgen::prelude::</span><span class="op">*;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> features2image_diffusion_widget<span class="op">;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">web_sys::</span>HtmlElement<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display" data-execution_count="2">
-<div>
 
+<script>
+if (typeof window.evcxr === 'undefined') {
+    window.evcxr = {};
 
-<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
-<thead>
-<tr class="header">
-<th data-quarto-table-cell-role="th"></th>
-<th data-quarto-table-cell-role="th">label</th>
-<th data-quarto-table-cell-role="th">f0</th>
-<th data-quarto-table-cell-role="th">f1</th>
-<th data-quarto-table-cell-role="th">f2</th>
-<th data-quarto-table-cell-role="th">f3</th>
-<th data-quarto-table-cell-role="th">f4</th>
-<th data-quarto-table-cell-role="th">f5</th>
-<th data-quarto-table-cell-role="th">f6</th>
-<th data-quarto-table-cell-role="th">f7</th>
-<th data-quarto-table-cell-role="th">f8</th>
-<th data-quarto-table-cell-role="th">...</th>
-<th data-quarto-table-cell-role="th">f246</th>
-<th data-quarto-table-cell-role="th">f247</th>
-<th data-quarto-table-cell-role="th">f248</th>
-<th data-quarto-table-cell-role="th">f249</th>
-<th data-quarto-table-cell-role="th">f250</th>
-<th data-quarto-table-cell-role="th">f251</th>
-<th data-quarto-table-cell-role="th">f252</th>
-<th data-quarto-table-cell-role="th">f253</th>
-<th data-quarto-table-cell-role="th">f254</th>
-<th data-quarto-table-cell-role="th">f255</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td data-quarto-table-cell-role="th">0</td>
-<td>5</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>0.0</td>
-<td>1.161055</td>
-<td>0.0</td>
-<td>3.392065</td>
-<td>1.578063</td>
-<td>0.0</td>
-<td>0.864978</td>
-<td>...</td>
-<td>0.000000</td>
-<td>1.805129</td>
-<td>0.690105</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>5.241269</td>
-<td>3.842837</td>
-<td>0.176452</td>
-<td>1.565828</td>
-<td>2.654130</td>
-</tr>
-<tr class="even">
-<td data-quarto-table-cell-role="th">1</td>
-<td>0</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>0.0</td>
-<td>2.358853</td>
-<td>1.813100</td>
-<td>0.0</td>
-<td>0.979746</td>
-<td>...</td>
-<td>0.000000</td>
-<td>1.363689</td>
-<td>0.324502</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>4.079500</td>
-<td>4.786779</td>
-<td>0.565612</td>
-<td>1.361328</td>
-<td>1.053584</td>
-</tr>
-<tr class="odd">
-<td data-quarto-table-cell-role="th">2</td>
-<td>4</td>
-<td>0.0</td>
-<td>0.671618</td>
-<td>0.0</td>
-<td>2.503571</td>
-<td>0.0</td>
-<td>2.140285</td>
-<td>2.176373</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>...</td>
-<td>0.798268</td>
-<td>1.046827</td>
-<td>5.871449</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>3.325204</td>
-<td>0.699517</td>
-<td>1.559370</td>
-<td>0.000000</td>
-<td>0.000000</td>
-</tr>
-<tr class="even">
-<td data-quarto-table-cell-role="th">3</td>
-<td>1</td>
-<td>0.0</td>
-<td>1.423953</td>
-<td>0.0</td>
-<td>1.501160</td>
-<td>0.0</td>
-<td>3.335502</td>
-<td>0.000000</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>...</td>
-<td>0.966482</td>
-<td>0.770367</td>
-<td>3.258740</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>0.427500</td>
-<td>0.728990</td>
-<td>1.242967</td>
-<td>0.000000</td>
-<td>1.957382</td>
-</tr>
-<tr class="odd">
-<td data-quarto-table-cell-role="th">4</td>
-<td>9</td>
-<td>0.0</td>
-<td>1.553129</td>
-<td>0.0</td>
-<td>1.257297</td>
-<td>0.0</td>
-<td>2.169177</td>
-<td>2.704326</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>...</td>
-<td>1.234310</td>
-<td>1.416535</td>
-<td>4.576626</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>4.055480</td>
-<td>1.079787</td>
-<td>2.771267</td>
-<td>0.000000</td>
-<td>0.000000</td>
-</tr>
-<tr class="even">
-<td data-quarto-table-cell-role="th">...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-<td>...</td>
-</tr>
-<tr class="odd">
-<td data-quarto-table-cell-role="th">59995</td>
-<td>8</td>
-<td>0.0</td>
-<td>1.231961</td>
-<td>0.0</td>
-<td>1.562882</td>
-<td>0.0</td>
-<td>0.851112</td>
-<td>1.040367</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>...</td>
-<td>0.567958</td>
-<td>0.203369</td>
-<td>2.788358</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>0.652251</td>
-<td>3.938322</td>
-<td>2.780792</td>
-<td>1.568819</td>
-<td>1.649010</td>
-</tr>
-<tr class="even">
-<td data-quarto-table-cell-role="th">59996</td>
-<td>3</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>0.0</td>
-<td>1.200623</td>
-<td>0.0</td>
-<td>1.093581</td>
-<td>0.922486</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>...</td>
-<td>0.000000</td>
-<td>0.889216</td>
-<td>2.278658</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>2.478583</td>
-<td>3.761220</td>
-<td>1.109611</td>
-<td>1.830709</td>
-<td>2.852156</td>
-</tr>
-<tr class="odd">
-<td data-quarto-table-cell-role="th">59997</td>
-<td>5</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>0.0</td>
-<td>1.269054</td>
-<td>0.0</td>
-<td>3.882545</td>
-<td>2.461601</td>
-<td>0.0</td>
-<td>0.414531</td>
-<td>...</td>
-<td>0.000000</td>
-<td>1.437299</td>
-<td>0.571311</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>4.221604</td>
-<td>3.603690</td>
-<td>1.651947</td>
-<td>1.986321</td>
-<td>0.207435</td>
-</tr>
-<tr class="even">
-<td data-quarto-table-cell-role="th">59998</td>
-<td>6</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>0.0</td>
-<td>2.222346</td>
-<td>0.0</td>
-<td>3.886921</td>
-<td>1.917095</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>...</td>
-<td>0.000000</td>
-<td>1.065447</td>
-<td>2.913041</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>3.674189</td>
-<td>2.821726</td>
-<td>1.130351</td>
-<td>1.015811</td>
-<td>1.842106</td>
-</tr>
-<tr class="odd">
-<td data-quarto-table-cell-role="th">59999</td>
-<td>8</td>
-<td>0.0</td>
-<td>0.625869</td>
-<td>0.0</td>
-<td>0.752750</td>
-<td>0.0</td>
-<td>1.623499</td>
-<td>2.026078</td>
-<td>0.0</td>
-<td>0.000000</td>
-<td>...</td>
-<td>0.259087</td>
-<td>0.821769</td>
-<td>1.960587</td>
-<td>0.0</td>
-<td>0.0</td>
-<td>2.367158</td>
-<td>4.284012</td>
-<td>2.825384</td>
-<td>1.166023</td>
-<td>0.031489</td>
-</tr>
-</tbody>
-</table>
+    // jupyter lab hides files behind the '/files/' prefix.
+    // which is annoying. We have to have to mind that while loading.
+    // here we find the path of the notebook in the active Jupyter Lab tab.
+    console.log('your first time calling the wasm command from evcxr, requires you to stay on the same jupyter lab tab during compilation, if you are using jupyter lab. sorry');
+    active_tab = document.querySelector('[class~=jp-mod-current]');
+    console.log(active_tab);
+    if (active_tab !== null) {
+        nb_dir = './' + active_tab.title.split('\n')[1].substr(6);
+        console.log(nb_dir);
+        nb_dir = nb_dir.substr(0, nb_dir.lastIndexOf('/')) + '/';
+        console.log(nb_dir);
+        window.evcxr_cwd = '/files/' + nb_dir;
+        console.log(window.evcxr_cwd);
+    }
+}
 
-<p>60000 rows × 257 columns</p>
+window.__evcxr_load = function(init, wasm_bindgen) {
+    for (const [fn_name, fn] of Object.entries(wasm_bindgen)) {
+        if (typeof fn === 'function') {
+            async function loader_fn(...args) {
+                await init();
+                return fn(...args);
+            };
+            Object.defineProperty(window.evcxr, fn_name, { 
+                writable: true,
+                value: loader_fn 
+            });
+        }
+    }
+}
+
+if (window.evcxr_cwd) {
+    import(window.evcxr_cwd + 'evcxr_pkg/feature-images/ctx.js').then((module) => {
+        console.log(module);
+        window.__evcxr_load(module.default, module);
+    });
+}
+</script>
+<script type="module">
+// this errors inside jupyter lab or jupyter notebook
+import init, * as wasm_bindgen from './evcxr_pkg/feature-images/ctx.js'
+window.__evcxr_load(init, wasm_bindgen);
+window.evcxr_cwd = './'
+</script>
 </div>
+</div>
+<div id="f339dd62-6465-4bf7-ba04-56e76657bbf7" class="cell" data-execution_count="2">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep rand <span class="op">=</span> <span class="st">"*"</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">rand::distributions::</span><span class="op">{</span>Alphanumeric<span class="op">,</span> DistString<span class="op">};</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> display_js(js<span class="op">:</span> <span class="op">&amp;</span><span class="dt">str</span>) <span class="op">{</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> id <span class="op">=</span> Alphanumeric<span class="op">.</span>sample_string(<span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">rand::</span>thread_rng()<span class="op">,</span> <span class="dv">16</span>)<span class="op">;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="pp">println!</span>(<span class="st">"EVCXR_BEGIN_CONTENT text/html</span><span class="sc">\n</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;link rel='stylesheet' href='../web/tailwind.css'&gt;</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;div id='{id}'&gt;&lt;/div&gt;</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;script&gt;</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="st">        async function __evcxr_display() {{</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="st">            evcxr = window.evcxr;</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="st">            cwd = window.evcxr_cwd;</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="st">            root = document.getElementById('{id}');</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="st">            {js}</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="st">        }};</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="st">        if (window.evcxr.keys) {{</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="st">            console.log('already exists');</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="st">            __evcxr_display();</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="st">        }} else {{</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="st">            console.log('adding listener');</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="st">            window.addEventListener('load', __evcxr_display);</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="st">        }}</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;/script&gt;</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a><span class="st">    </span><span class="sc">\n</span><span class="st">EVCXR_END_CONTENT"</span>)<span class="op">;</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div id="aa694acc-7876-4d53-816b-9cc37d51edce" class="cell" data-execution_count="3">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep features2image_diffusion<span class="op">-</span>read<span class="op">-</span>result <span class="op">=</span> <span class="op">{</span> path <span class="op">=</span> <span class="st">"../read-result"</span> <span class="op">}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">features2image_diffusion_read_result::</span>create_file_tensor<span class="op">;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">features2image_diffusion_read_result::f2id_fs::</span>Files<span class="op">;</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">features2image_diffusion_read_result::list_paths::</span>list_paths<span class="op">;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> RUN_ID <span class="op">=</span> <span class="st">"4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa"</span><span class="op">;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> RUN_DIR <span class="op">=</span> <span class="pp">format!</span>(<span class="st">"../xyz/run/{RUN_ID}"</span>)<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div id="37d41223-c5e7-43b2-808a-6ebb95bfbd15" class="cell" data-execution_count="4">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> files<span class="op">:</span> Files <span class="op">=</span> create_file_tensor(<span class="op">&amp;</span>RUN_DIR)<span class="op">.</span>unwrap()<span class="op">;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="pp">std::fs::</span>write(<span class="st">"./files.bytes"</span><span class="op">,</span> files<span class="op">.</span>to_bytes()<span class="op">?</span>)<span class="op">?;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>files<span class="op">.</span>dfmt<span class="op">.</span>shape()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="5">
+<pre><code>[18, 256, 4, 3]</code></pre>
+</div>
+</div>
+<div id="7386f0e9-a26b-4086-a326-fce6fe76c271" class="cell" data-execution_count="5">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>display_js(<span class="op">&amp;</span><span class="pp">format!</span>(<span class="st">"</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="st">resp = await fetch(cwd + 'files.bytes');</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="st">evcxr.feature_images(</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="st">    root,</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="st">    new Uint8Array(await resp.arrayBuffer()),</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="st">    cwd + '{RUN_DIR}'</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="st">);</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="st">"</span>))<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="6">
+    <link rel="stylesheet" href="../web/tailwind.css">
+    <div id="py267c0pkBh3179k"></div>
+    <script>
+        async function __evcxr_display() {
+            evcxr = window.evcxr;
+            cwd = window.evcxr_cwd;
+            root = document.getElementById('py267c0pkBh3179k');
+            
+resp = await fetch(cwd + 'files.bytes');
+evcxr.feature_images(
+    root,
+    new Uint8Array(await resp.arrayBuffer()),
+    cwd + '../xyz/run/4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa'
+);
+
+        };
+        if (window.evcxr.keys) {
+            console.log('already exists');
+            __evcxr_display();
+        } else {
+            console.log('adding listener');
+            window.addEventListener('load', __evcxr_display);
+        }
+    </script>
+    
 </div>
 </div>
 
@@ -552,10 +344,27 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
     // clear code selection
     e.clearSelection();
   });
-  function tippyHover(el, contentFn) {
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
     const config = {
       allowHTML: true,
-      content: contentFn,
       maxWidth: 500,
       delay: 100,
       arrow: false,
@@ -565,8 +374,17 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
       interactive: true,
       interactiveBorder: 10,
       theme: 'quarto',
-      placement: 'bottom-start'
+      placement: 'bottom-start',
     };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
     window.tippy(el, config); 
   }
   const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
@@ -578,7 +396,130 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
       try { href = new URL(href).hash; } catch {}
       const id = href.replace(/^#\/?/, "");
       const note = window.document.getElementById(id);
-      return note.innerHTML;
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
     });
   }
       let selectedAnnoteEl;
@@ -622,6 +563,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
             }
             div.style.top = top - 2 + "px";
             div.style.height = height + 4 + "px";
+            div.style.left = 0;
             let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
             if (gutterDiv === null) {
               gutterDiv = window.document.createElement("div");
@@ -647,6 +589,32 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
         });
         selectedAnnoteEl = undefined;
       };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
       // Attach click handler to the DT
       const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
       for (const annoteDlNode of annoteDls) {
@@ -707,6 +675,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 });
 </script>
 </div> <!-- /content -->
+
 
 
 

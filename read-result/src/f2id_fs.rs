@@ -7,7 +7,8 @@ use ndarray::prelude::*;
 use ndarray::Slice;
 use strum::{IntoEnumIterator, EnumIter};
 use serde::{Deserialize, Serialize};
-
+use postcard;
+use anyhow::Result;
 
 #[derive(Hash, EnumIter, PartialEq, std::cmp::Eq, Ord, PartialOrd, Clone, Debug, Serialize, Deserialize)]
 pub enum Argument {
@@ -162,6 +163,14 @@ impl Files {
             }
         }
         out
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+        postcard::from_bytes(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        Ok(postcard::to_stdvec(self)?)
     }
 }
 

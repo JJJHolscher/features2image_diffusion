@@ -15,9 +15,11 @@ crate-type = ["lib"]
 chrono = { version = "0.4.33", features = ["serde"] }
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.113"
+serde_json_any_key = "2.0"
 serde_qs = "0.12.0"
 itertools = "0.12.1"
 collect_slice = "1.2.0"
 ndarray = { version = "0.15.6", features = ["serde"] }
 strum = { version = "0.26.1", features = ["derive"] }
 anyhow = "1.0.81"
+postcard = { version = "*", features = ["use-std"] }

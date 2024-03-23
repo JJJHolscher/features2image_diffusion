@@ -6,25 +6,32 @@ use web_sys::HtmlElement;
 use features2image_diffusion_read_result::f2id_fs::Files;
 use serde_json;
 use std::boxed::Box;
+use tao_log::{debugv, info};
 
 pub mod feature_images;
 use feature_images::FeatureImages;
 
 fn init_logger() {
     console_log::init_with_level(Level::Debug);
+    console_error_panic_hook::set_once();
 }
 
 
 #[wasm_bindgen]
-pub fn feature_images(root: &HtmlElement, pathor: String) {
+pub fn feature_images(root: &HtmlElement, files: Vec<u8>, run_dir: String) {
     init_logger();
     root.set_inner_html("");
     dioxus_web::launch::launch(
         FeatureImages,
-        vec![Box::new(move || {
-            let files: Files = serde_json::from_str(&pathor).unwrap();
-            Box::new(files)
-        })],
+        vec![
+            Box::new(move || Box::new(
+                Files::from_bytes(&files)
+                    .expect("could not deserialize the files")
+            )),
+            Box::new(move || Box::new(
+                run_dir.clone()
+            )),
+        ],
         dioxus_web::Config::new().rootname(root.id())
     );
 }

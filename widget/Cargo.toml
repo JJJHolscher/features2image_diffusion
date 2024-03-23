@@ -29,4 +29,5 @@ tao-log = "1.0"
 proc-macro2 = "1"
 # ndarray = "0.15.6"
 # strum = { version = "0.26.1", features = ["derive"] }
+console_error_panic_hook = "*"
 features2image_diffusion-read-result = { path = "../read-result" }
