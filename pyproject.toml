@@ -38,7 +38,7 @@ include = ["features2image_diffusion"]
 readme = {file = ["README.md"], content-type = "text/markdown"}
 
 [tool.jupytext]
-formats = "ipynb,py"
+formats = "ipynb,qmd"
 
 [tool.pyright]
 # see https://github.com/microsoft/pyright/blob/main/docs/configuration.md

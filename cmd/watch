@@ -1,4 +1,9 @@
 #!/bin/bash
 
+trap 'kill $jupytext_pid; exit' INT
+
+jupytext --sync &
+jupytext_pid=$!
+
 # cargo install cargo-watch
 cargo watch -w "src" -s "clear && cmd/build"

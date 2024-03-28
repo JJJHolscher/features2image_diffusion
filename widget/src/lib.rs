@@ -18,9 +18,10 @@ fn init_logger() {
 
 
 #[wasm_bindgen]
-pub fn feature_images(root: &HtmlElement, files: Vec<u8>, run_dir: String) {
+pub fn feature_images(root: &HtmlElement, run_dir: String, files: Vec<u8>) {
     init_logger();
     root.set_inner_html("");
+    debugv!(&files);
     dioxus_web::launch::launch(
         FeatureImages,
         vec![
