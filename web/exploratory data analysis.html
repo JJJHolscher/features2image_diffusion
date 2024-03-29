@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 
-<div id="630c31e2-cd77-4ad5-adf7-809835880667" class="cell" data-execution_count="1">
+<div id="630c31e2-cd77-4ad5-adf7-809835880667" class="cell" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>wasm feature<span class="op">-</span>images</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep wasm<span class="op">-</span>bindgen <span class="op">=</span> <span class="st">"*"</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep features2image_diffusion<span class="op">-</span>widget <span class="op">=</span> <span class="op">{</span> path <span class="op">=</span> <span class="st">"../widget"</span> <span class="op">}</span></span>
@@ -133,132 +133,109 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>
 if (typeof window.evcxr === 'undefined') {
     window.evcxr = {};
-
-    // jupyter lab hides files behind the '/files/' prefix.
-    // which is annoying. We have to have to mind that while loading.
-    // here we find the path of the notebook in the active Jupyter Lab tab.
-    console.log('your first time calling the wasm command from evcxr, requires you to stay on the same jupyter lab tab during compilation, if you are using jupyter lab. sorry');
-    active_tab = document.querySelector('[class~=jp-mod-current]');
-    console.log(active_tab);
-    if (active_tab !== null) {
-        nb_dir = './' + active_tab.title.split('\n')[1].substr(6);
-        console.log(nb_dir);
-        nb_dir = nb_dir.substr(0, nb_dir.lastIndexOf('/')) + '/';
-        console.log(nb_dir);
-        window.evcxr_cwd = '/files/' + nb_dir;
-        console.log(window.evcxr_cwd);
-    }
 }
 
-window.__evcxr_load = function(init, wasm_bindgen) {
+window.__evcxr_load = function(wasm_bindgen) {
     for (const [fn_name, fn] of Object.entries(wasm_bindgen)) {
         if (typeof fn === 'function') {
-            async function loader_fn(...args) {
-                await init();
-                return fn(...args);
-            };
             Object.defineProperty(window.evcxr, fn_name, { 
                 writable: true,
-                value: loader_fn 
+                value: fn 
             });
+            window.dispatchEvent(new Event('evcxr_' + fn_name));
         }
     }
 }
-
-if (window.evcxr_cwd) {
-    import(window.evcxr_cwd + 'evcxr_pkg/feature-images/ctx.js').then((module) => {
-        console.log(module);
-        window.__evcxr_load(module.default, module);
-    });
-}
 </script>
 <script type="module">
-// this errors inside jupyter lab or jupyter notebook
-import init, * as wasm_bindgen from './evcxr_pkg/feature-images/ctx.js'
-window.__evcxr_load(init, wasm_bindgen);
-window.evcxr_cwd = './'
+import init, * as wasm_bindgen from './evcxr_pkg/feature-images/ctx.js';
+await init();
+if (typeof window.evcxr_cwd === 'undefined') {
+    window.evcxr_cwd = '.';
+    window.dispatchEvent(new Event('__evcxr_cwd'));
+}
+window.__evcxr_load(wasm_bindgen);
+</script>
+<script type="module">
+import init, * as wasm_bindgen from '/files/doc/evcxr_pkg/feature-images/ctx.js';
+await init();
+if (typeof window.evcxr_cwd === 'undefined') {
+    window.evcxr_cwd = '/files/doc';
+    window.dispatchEvent(new Event('__evcxr_cwd'));
+}
+window.__evcxr_load(wasm_bindgen);
 </script>
 </div>
 </div>
-<div id="f339dd62-6465-4bf7-ba04-56e76657bbf7" class="cell" data-execution_count="2">
-<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep rand <span class="op">=</span> <span class="st">"*"</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">rand::distributions::</span><span class="op">{</span>Alphanumeric<span class="op">,</span> DistString<span class="op">};</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> display_js(js<span class="op">:</span> <span class="op">&amp;</span><span class="dt">str</span>) <span class="op">{</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> id <span class="op">=</span> Alphanumeric<span class="op">.</span>sample_string(<span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">rand::</span>thread_rng()<span class="op">,</span> <span class="dv">16</span>)<span class="op">;</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="pp">println!</span>(<span class="st">"EVCXR_BEGIN_CONTENT text/html</span><span class="sc">\n</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;link rel='stylesheet' href='../web/tailwind.css'&gt;</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;div id='{id}'&gt;&lt;/div&gt;</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;script&gt;</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="st">        async function __evcxr_display() {{</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="st">            evcxr = window.evcxr;</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="st">            cwd = window.evcxr_cwd;</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="st">            root = document.getElementById('{id}');</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="st">            {js}</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="st">        }};</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="st">        if (window.evcxr.keys) {{</span></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="st">            console.log('already exists');</span></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="st">            __evcxr_display();</span></span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="st">        }} else {{</span></span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="st">            console.log('adding listener');</span></span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="st">            window.addEventListener('load', __evcxr_display);</span></span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="st">        }}</span></span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="st">    &lt;/script&gt;</span></span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a><span class="st">    </span><span class="sc">\n</span><span class="st">EVCXR_END_CONTENT"</span>)<span class="op">;</span></span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</div>
 <div id="aa694acc-7876-4d53-816b-9cc37d51edce" class="cell" data-execution_count="3">
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep features2image_diffusion<span class="op">-</span>read<span class="op">-</span>result <span class="op">=</span> <span class="op">{</span> path <span class="op">=</span> <span class="st">"../read-result"</span> <span class="op">}</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">features2image_diffusion_read_result::</span>create_file_tensor<span class="op">;</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">features2image_diffusion_read_result::f2id_fs::</span>Files<span class="op">;</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">features2image_diffusion_read_result::list_paths::</span>list_paths<span class="op">;</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> RUN_ID <span class="op">=</span> <span class="st">"4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa"</span><span class="op">;</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> RUN_DIR <span class="op">=</span> <span class="pp">format!</span>(<span class="st">"../xyz/run/{RUN_ID}"</span>)<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep features2image_diffusion<span class="op">-</span>read<span class="op">-</span>result <span class="op">=</span> <span class="op">{</span> path <span class="op">=</span> <span class="st">"../read-result"</span> <span class="op">}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="op">:</span>dep evcxr_ssg <span class="op">=</span> <span class="st">"*"</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">evcxr_ssg::</span>call_wasm<span class="op">;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">features2image_diffusion_read_result::</span><span class="op">{</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    create_file_tensor<span class="op">,</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="pp">f2id_fs::</span>Files<span class="op">,</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="pp">list_paths::</span>list_paths</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="pp">evcxr_ssg::</span>stylesheet(<span class="st">"../web/tailwind.css"</span>)<span class="op">;</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> RUN_ID <span class="op">=</span> <span class="st">"4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa"</span><span class="op">;</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> RUN_DIR <span class="op">=</span> <span class="pp">format!</span>(<span class="st">"../xyz/run/{RUN_ID}"</span>)<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="3">
+<script>
+function __evcxr_stylesheet() {
+    const link = document.getElementById('evcxr_stylesheet');
+    if (link) {
+        link.href = window.evcxr_cwd + '/../web/tailwind.css';
+    } else {
+        const link = document.createElement('link');
+        link.id = 'evcxr_stylesheet';
+        link.href = window.evcxr_cwd + '/../web/tailwind.css';
+        link.rel = 'stylesheet';
+        document.getElementsByTagName('head')[0].appendChild(link);
+    }
+}
+if (typeof window.evcxr_cwd === 'undefined') {
+    window.addEventListener(
+        '__evcxr_cwd',
+        __evcxr_stylesheet,
+        { once: true }
+    );
+} else {
+    __evcxr_stylesheet();
+}
+</script>
+</div>
 </div>
 <div id="37d41223-c5e7-43b2-808a-6ebb95bfbd15" class="cell" data-execution_count="4">
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> files<span class="op">:</span> Files <span class="op">=</span> create_file_tensor(<span class="op">&amp;</span>RUN_DIR)<span class="op">.</span>unwrap()<span class="op">;</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="pp">std::fs::</span>write(<span class="st">"./files.bytes"</span><span class="op">,</span> files<span class="op">.</span>to_bytes()<span class="op">?</span>)<span class="op">?;</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>files<span class="op">.</span>dfmt<span class="op">.</span>shape()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="5">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> files<span class="op">:</span> Files <span class="op">=</span> create_file_tensor(<span class="op">&amp;</span>RUN_DIR)<span class="op">.</span>unwrap()<span class="op">;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>files<span class="op">.</span>dfmt<span class="op">.</span>shape()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="4">
 <pre><code>[18, 256, 4, 3]</code></pre>
 </div>
 </div>
 <div id="7386f0e9-a26b-4086-a326-fce6fe76c271" class="cell" data-execution_count="5">
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>display_js(<span class="op">&amp;</span><span class="pp">format!</span>(<span class="st">"</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="st">resp = await fetch(cwd + 'files.bytes');</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="st">evcxr.feature_images(</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="st">    root,</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="st">    new Uint8Array(await resp.arrayBuffer()),</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="st">    cwd + '{RUN_DIR}'</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="st">);</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="st">"</span>))<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="6">
-    <link rel="stylesheet" href="../web/tailwind.css">
-    <div id="py267c0pkBh3179k"></div>
-    <script>
-        async function __evcxr_display() {
-            evcxr = window.evcxr;
-            cwd = window.evcxr_cwd;
-            root = document.getElementById('py267c0pkBh3179k');
-            
-resp = await fetch(cwd + 'files.bytes');
-evcxr.feature_images(
-    root,
-    new Uint8Array(await resp.arrayBuffer()),
-    cwd + '../xyz/run/4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa'
-);
-
-        };
-        if (window.evcxr.keys) {
-            console.log('already exists');
-            __evcxr_display();
-        } else {
-            console.log('adding listener');
-            window.addEventListener('load', __evcxr_display);
-        }
-    </script>
-    
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="pp">call_wasm!</span>(<span class="st">"feature_images"</span><span class="op">,</span> <span class="st">"$"</span><span class="op">,</span> <span class="op">&amp;</span>RUN_DIR<span class="op">,</span> <span class="op">&amp;</span>files)<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div id="feature_images_ZJwIheHS"></div>
+<script>
+async function __evcxr_display_feature_images_ZJwIheHS() {
+    root = document.getElementById('feature_images_ZJwIheHS');
+    args = [];
+    args.push(root);
+args.push(window.evcxr_cwd + '/../xyz/run/4409b6282a7d05f0b08880228d6d6564011fa40be412073ff05aff8bf2dc49fa');
+resp = await fetch(window.evcxr_cwd + '/evcxr_pkg/dc5f7d84cccf2f5cb15801be1c28a9946977315623c5b84c19ad0e80ff376331.postcard');
+            args.push(new Uint8Array(await resp.arrayBuffer()));
+    window.evcxr.feature_images(...args);
+}
+if (window.evcxr.feature_images) {
+    __evcxr_display_feature_images_ZJwIheHS();
+} else {
+    window.addEventListener(
+        'evcxr_feature_images',
+        __evcxr_display_feature_images_ZJwIheHS,
+        { once: true }
+    );
+}
+</script>
 </div>
 </div>
 

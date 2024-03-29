@@ -1,7 +1,0 @@
-# work thus far
-
-There exist two gits. 
-The first is [the spare auto-encoder github](https://github.com/JJJHolscher/sparse_autoencoder).
-This is the features2image_diffusion github.
-
-

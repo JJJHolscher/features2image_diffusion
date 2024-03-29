@@ -1,11 +1,9 @@
 #!/usr/bin/bash
 
-echo "starting server on http://127.0.0.1:5790"
-
 trap 'kill $server_pid; kill $tailwind_pid; exit' INT
 
 # open the browser
-$BROWSER --app='http://localhost:5790/'
+$BROWSER 'http://localhost:5790/'
 
 # serve files
 python -m http.server 5790 &
@@ -17,4 +15,4 @@ tailwind_pid=$!
 
 # have quarto compile to html
 cd doc
-quarto preview "$@" --no-serve
+quarto preview --no-serve --no-browser
