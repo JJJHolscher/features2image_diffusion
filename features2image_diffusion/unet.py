@@ -120,7 +120,7 @@ class EmbedFC(nn.Module):
 
 
 class ContextUnet(nn.Module):
-    def __init__(self, in_channels, hidden_size=256, n_classes=10):
+    def __init__(self, in_channels, hidden_size=256, n_classes=10, img_len=28):
         super(ContextUnet, self).__init__()
 
         self.in_channels = in_channels
@@ -134,7 +134,7 @@ class ContextUnet(nn.Module):
         self.down1 = UnetDown(hidden_size, hidden_size)
         self.down2 = UnetDown(hidden_size, 2 * hidden_size)
 
-        self.to_vec = nn.Sequential(nn.AvgPool2d(7), nn.GELU())
+        self.to_vec = nn.Sequential(nn.AvgPool2d(img_len // 4), nn.GELU())
 
         self.timeembed1 = EmbedFC(1, 2 * hidden_size)
         self.timeembed2 = EmbedFC(1, 1 * hidden_size)
@@ -145,7 +145,12 @@ class ContextUnet(nn.Module):
             # when concat temb and cemb end up w 6*hidden_size
             # nn.ConvTranspose2d(6 * hidden_size, 2 * hidden_size, 7, 7),
             # otherwise just have 2*hidden_size
-            nn.ConvTranspose2d(2 * hidden_size, 2 * hidden_size, 7, 7),
+            nn.ConvTranspose2d(
+                2 * hidden_size,
+                2 * hidden_size,
+                img_len // 4,
+                img_len // 4
+            ),
             nn.GroupNorm(8, 2 * hidden_size),
             nn.ReLU(),
         )
@@ -238,7 +243,7 @@ class DDPM(nn.Module):
 
     def forward(
         self,
-        x: Float[torch.Tensor, "batch 1 28 28"],
+        x: Float[torch.Tensor, "batch color width height"],
         c: Float[torch.Tensor, "batch feature"],
     ):
         """

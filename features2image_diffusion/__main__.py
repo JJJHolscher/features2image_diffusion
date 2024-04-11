@@ -18,18 +18,19 @@ from typing import Optional
 
 import argtoml
 import matplotlib.pyplot as plt
+import tomli_w
 import torch
 from jaxtyping import Float
 from jo3mnist.vis import to_img
 from jo3util.root import run_dir as jo3run_dir
 from matplotlib.animation import FuncAnimation, PillowWriter
-import tomli_w
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image
 from tqdm import tqdm
 
-from .data import load_mnist_with_features
+from .data import (load_imagenet_with_features, load_mnist_with_features,
+                   load_tiny_imagenet_with_features)
 from .eval import generate_on_edits
 from .unet import DDPM, ContextUnet
 
@@ -37,7 +38,8 @@ from .unet import DDPM, ContextUnet
 def evaluate(
     ddpm: DDPM,
     f: Float[torch.Tensor, "n_example feature"],
-    x: Float[torch.Tensor, "n_example 1 28 28"],
+    x: Float[torch.Tensor, "n_example color width height"],
+    data_shape: tuple,
     n_sample: int,
     img_path: Optional[Path],
     gif_path: Optional[Path] = None,
@@ -58,7 +60,7 @@ def evaluate(
         gif: whether to create a gif showing the image generation process
     """
     n_example = len(f)
-    x_gen, x_gen_store = ddpm.sample(f, n_sample, (1, 28, 28), device)
+    x_gen, x_gen_store = ddpm.sample(f, n_sample, data_shape, device)
 
     fig, axs = plt.subplots(n_sample + 1, n_example, facecolor="gray")
     fig.tight_layout()
@@ -171,11 +173,10 @@ def train_epoch(
 
 
 def train(
-    features_path: Path,
-    mnist_path: Path,
     run_dir: Path,
+    train_loader: DataLoader,
+    test_loader: DataLoader,
     n_epoch: int = 20,
-    batch_size: int = 64,
     n_T: int = 400,  # 500
     hidden_size: int = 128,  # 128 ok, 256 better (but slower)
     lr: float = 1e-4,
@@ -217,17 +218,16 @@ def train(
         n_sample: the number of generations per example test image the DDPM
             creates during evaluation.
     """
-    # mnist is already normalised 0 to 1
-    # _ = transforms.Compose([transforms.ToTensor()])
-    train_loader, test_loader = load_mnist_with_features(
-        features_path, mnist_path, batch_size
-    )
     test_loader = iter(test_loader)
-    n_classes = next(iter(train_loader))[0].shape[-1]
+    features, images, _ = next(iter(train_loader))
+    img_shape = tuple(images.shape[1:])
 
     ddpm = DDPM(
         nn_model=ContextUnet(
-            in_channels=1, hidden_size=hidden_size, n_classes=n_classes
+            in_channels=img_shape[0],
+            hidden_size=hidden_size,
+            n_classes=features.shape[1],
+            img_len=img_shape[-1],
         ),
         betas=(1e-4, 0.02),
         n_T=n_T,
@@ -278,6 +278,7 @@ def train(
                 ddpm,
                 f[:n_example],
                 x[:n_example],
+                img_shape,
                 n_sample,
                 img_path,
                 result_dir / f"gif_ep{ep}.gif" if not ep % 5 else None,
@@ -287,33 +288,62 @@ def train(
 
 if __name__ == "__main__":
     O = argtoml.parse_args()
+
+    if "debug" in O and O["debug"]:
+        import debugpy
+
+        debugpy.listen(5678)
+
     for RUN in O["train"]:
-        RUN_DIR = jo3run_dir(RUN)
+        RUN_DIR = jo3run_dir(RUN, "./run")
         if not RUN_DIR.exists():
-            RUN_DIR.mkdir()
+            RUN_DIR.mkdir(parents=True)
             with open(RUN_DIR / "config.toml", "wb") as f:
                 tomli_w.dump(O, f)
             with open(RUN_DIR / "hyparam.toml", "wb") as f:
                 tomli_w.dump(RUN, f)
+
+        if "mnist_dir" in RUN and RUN["mnist_dir"]:
+            train_loader, test_loader = load_mnist_with_features(
+                RUN["feature_dir"], RUN["mnist_dir"], RUN["batch_size"]
+            )
+        elif "tiny_imagenet_dir" in RUN and RUN["tiny_imagenet_dir"]:
+            train_loader, test_loader = load_tiny_imagenet_with_features(
+                RUN["feature_dir"],
+                RUN["tiny_imagenet_dir"],
+                batch_size=RUN["batch_size"],
+                shuffle=True,
+            )
+        elif "imagenet_dir" in RUN and RUN["imagenet_dir"]:
+            train_loader, test_loader = load_imagenet_with_features(
+                RUN["feature_dir"],
+                RUN["imagenet_dir"],
+                image_size=RUN["image_size"],
+                batch_size=RUN["batch_size"],
+                shuffle=True,
+            )
+        else:
+            raise ValueError("No dataset dir specified")
+
         train(
-            RUN["feature_dir"],
-            O["mnist_dir"],
-            run_dir=RUN_DIR,
+            RUN_DIR,
+            train_loader,
+            test_loader,
             n_epoch=RUN["epochs"],
             hidden_size=RUN["hidden_size"],
-            batch_size=RUN["batch_size"],
             drop_prob=RUN["drop_prob"],
         )
 
+    exit()
     with torch.no_grad():
         for RUN in O["eval"]:
-            RUN_DIR = jo3run_dir(RUN)
-            RUN_DIR.mkdir()
+            RUN_DIR = jo3run_dir(RUN, "./run")
+            RUN_DIR.mkdir(parents=True)
             with open(RUN_DIR / "config.toml", "wb") as f:
                 tomli_w.dump(O, f)
             generate_on_edits(
                 out_dir=RUN_DIR,
                 mnist_dir=O["mnist_dir"],
                 device=O["device"],
-                **RUN
+                **RUN,
             )

@@ -9,11 +9,92 @@ import pandas as pd
 import torchvision
 from tqdm import tqdm
 from jo3mnist.vis import to_img
-from jo3util.warning import todo
+from jo3mnist.tiny_imagenet import TinyImageTrainNet, TinyImageTestNet
+from jo3mnist.imagenet import ImageNet
+# from jo3util.warning import todo
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import MNIST
+from torchvision.transforms import Resize
 
+
+def load_imagenet_with_features(
+    features_path,
+    images_path,
+    image_size=224,
+    **kwargs
+):
+    train_loader = DataLoader(
+        ImageNetSet(
+            Path(features_path) / "train",
+            Path(images_path) / "train",
+            image_size=image_size
+        ),
+        **kwargs
+    )
+    test_loader = DataLoader(
+        ImageNetSet(
+            Path(features_path) / "validation",
+            Path(images_path) / "validation",
+            image_size=image_size
+        ),
+        **kwargs
+    )
+    return train_loader, test_loader
+
+
+class ImageNetSet(Dataset):
+    def __init__(self, features_path, imagenet_path, image_size=224):
+        self.imagenet = ImageNet(imagenet_path, image_size=image_size)
+        self.paths = [p for p in Path(features_path).glob("[0-9]*.npy")]
+
+    def __getitem__(self, i):
+        features = np.load(self.paths[i], allow_pickle=False).flatten()
+        image, label = self.imagenet[i]
+        return torch.Tensor(features), image, label
+
+    def __len__(self):
+        return len(self.paths)
+
+
+class TinyImageNetSet(Dataset):
+    resize = Resize([64, 64])
+
+    def __init__(self, features_path, images_path, train: bool):
+        if train:
+            self.set = TinyImageTrainNet(Path(images_path))
+            paths = Path(features_path).glob("train/[0-9]*.npy")
+        else:
+            self.set = TinyImageTestNet(Path(images_path))
+            paths = Path(features_path).glob("test/[0-9]*.npy")
+        self.paths = [p for p in paths]
+
+        assert len(self.paths) == len(self.set)
+
+    def __getitem__(self, i):
+        features = np.load(self.paths[i], allow_pickle=False).flatten()
+        image, label = self.set[i]
+        image = self.resize(torch.Tensor(image))
+        return torch.Tensor(features), image, label
+
+    def __len__(self):
+        return len(self.paths)
+
+
+def load_tiny_imagenet_with_features(features_path, images_path, **kwargs):
+    trainset = TinyImageNetSet(
+        features_path,
+        Path(images_path) / "train",
+        train=True
+    )
+    testset = TinyImageNetSet(
+        features_path,
+        Path(images_path) / "val",
+        train=False
+    )
+    trainloader = DataLoader(trainset, **kwargs)
+    testloader = DataLoader(testset, **kwargs)
+    return trainloader, testloader
 
 
 class MnistFeaturesSet(Dataset):
@@ -28,7 +109,6 @@ class MnistFeaturesSet(Dataset):
         )
 
         train = "train" if train else "test"
-        todo("Make sure file names are numeric before the .npy.")
         paths = Path(features_path).glob(train + "/[0-9]*.npy")
         self.paths = [p for p in paths]
 

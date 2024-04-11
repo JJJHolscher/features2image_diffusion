@@ -1,5 +1,5 @@
 
 device = "cuda:0"
-mnist_dir = "./res/mnist"
+# mnist_dir = "./res/mnist"
 
 # See sweep.toml and train.toml for additional settings for different types of runs.

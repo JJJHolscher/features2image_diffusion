@@ -1,6 +1,8 @@
 ## my idiosyncracies
 /tmp*
 /tags*
+/run
+/res
 
 /doc/**
 !/doc/**.ipynb
