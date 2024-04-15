@@ -250,6 +250,13 @@ def train(
     for ep in range(n_epoch):
         model_path = model_dir / f"epoch-{ep}.pth"
         if not model_path.exists():
+
+            if not ddpm_loaded and ep > 0:
+                model_path_ = model_dir / f"epoch-{ep-1}.pth"
+                print("loading", model_path_)
+                ddpm.load_state_dict(torch.load(model_path_))
+                ddpm_loaded = True
+                
             print(f"epoch {ep}")
             train_epoch(
                 ddpm,
@@ -262,6 +269,8 @@ def train(
             )
             torch.save(ddpm.state_dict(), model_path)
             ddpm_loaded = True
+
+        continue
         # for eval, save an image of currently generated samples (top rows)
         # followed by real images (bottom rows)
         ddpm.eval()

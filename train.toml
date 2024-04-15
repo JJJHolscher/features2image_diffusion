@@ -15,7 +15,7 @@ feature_dir = "../sparse_autoencoder/run/1ae3fe65"
 
 image_size = 64
 
-epochs = 23
+epochs = 40
 batch_size = 64
 diffusion_steps = 400
 hidden_size = 128
