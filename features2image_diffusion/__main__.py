@@ -20,17 +20,17 @@ import argtoml
 import matplotlib.pyplot as plt
 import tomli_w
 import torch
+import torchvision
 from jaxtyping import Float
 from jo3mnist.vis import to_img
 from jo3util.root import run_dir as jo3run_dir
 from matplotlib.animation import FuncAnimation, PillowWriter
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
-from torchvision.utils import make_grid, save_image
 from tqdm import tqdm
 
-from .data import (load_imagenet_with_features, load_mnist_with_features,
-                   load_tiny_imagenet_with_features)
+from .data import (ImageNetSet, MnistFeaturesSet, load_imagenet_with_features,
+                   load_mnist_with_features, load_tiny_imagenet_with_features)
 from .eval import generate_on_edits
 from .unet import DDPM, ContextUnet
 
@@ -250,13 +250,12 @@ def train(
     for ep in range(n_epoch):
         model_path = model_dir / f"epoch-{ep}.pth"
         if not model_path.exists():
-
             if not ddpm_loaded and ep > 0:
                 model_path_ = model_dir / f"epoch-{ep-1}.pth"
                 print("loading", model_path_)
                 ddpm.load_state_dict(torch.load(model_path_))
                 ddpm_loaded = True
-                
+
             print(f"epoch {ep}")
             train_epoch(
                 ddpm,
@@ -343,16 +342,38 @@ if __name__ == "__main__":
             drop_prob=RUN["drop_prob"],
         )
 
-    exit()
+    if "mnist_dir" in O and O["mnist_dir"]:
+        data_set = MnistFeaturesSet(
+            O["feature_dir"],
+            O["mnist_dir"],
+            train=True,
+            transform=torchvision.transforms.Compose(
+                [
+                    torchvision.transforms.ToTensor(),
+                    torchvision.transforms.Normalize((0.5,), (0.5,)),
+                ]
+            ),
+        )
+    elif "imagenet_dir" in O and O["imagenet_dir"]:
+        data_set = ImageNetSet(
+            Path(O["feature_dir"]) / "train",
+            Path(O["imagenet_dir"]) / "train",
+            image_size=O["image_size"],
+        )
+    else:
+        raise ValueError("No dataset dir specified")
+
     with torch.no_grad():
         for RUN in O["eval"]:
             RUN_DIR = jo3run_dir(RUN, "./run")
             RUN_DIR.mkdir(parents=True)
             with open(RUN_DIR / "config.toml", "wb") as f:
                 tomli_w.dump(O, f)
+
             generate_on_edits(
                 out_dir=RUN_DIR,
-                mnist_dir=O["mnist_dir"],
+                data_set=data_set,
                 device=O["device"],
+                n_channels=O["n_channels"],
                 **RUN,
             )

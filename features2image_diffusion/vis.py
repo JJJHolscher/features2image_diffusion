@@ -65,7 +65,11 @@ def tabulate_generations(
     for i, generation in enumerate(generations):
         r = i // cols
         c = i % cols
-        axs[r, c].imshow(to_img(generation))
+        if len(generation.shape) == 3:
+            generation = (generation + 2.1008) / (2.64 + 2.1008)
+            axs[r, c].imshow(generation.permute(1, 2, 0))
+        else:
+            axs[r, c].imshow(to_img(generation))
         axs[r, c].set_axis_off()
     if original_img is not None:
         axs[-1, -1].imshow(to_img(original_img))

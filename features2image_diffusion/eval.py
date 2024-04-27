@@ -1,15 +1,14 @@
-
 from datetime import datetime
 from pathlib import Path
 
-from jaxtyping import Float
-from jo3util.debug import breakpoint as jo3breakpoint
 import matplotlib.pyplot as plt
 import numpy as np
-from tqdm import tqdm
 import torch
-from torch.utils.data import DataLoader
 import torchvision
+from jaxtyping import Float
+from jo3util.debug import breakpoint as jo3breakpoint
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from .data import MnistFeaturesSet, loader_to_dataframe
 from .unet import DDPM, load_ddpm
@@ -21,30 +20,24 @@ def generate_on_edits(
     centile_edits,
     data_ids,
     model_path,
-    feature_dir,
-    mnist_dir,
+    data_set,
     out_dir: Path,
     num_generations,
     device,
-    **kwargs
+    n_channels,
+    **kwargs,
 ):
-    data_set = MnistFeaturesSet(
-        feature_dir,
-        mnist_dir,
-        train=True,
-        transform=torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.5,), (0.5,)),
-        ])
-    )
     num_features = data_set[0][0].shape[-1]
+    img_len = data_set[0][1].shape[-1]
     feature_ids = feature_ids if feature_ids else list(range(num_features))
 
     ddpm = load_ddpm(
         model_path,
         num_features,
         device=device,
-        **kwargs
+        n_channels=n_channels,
+        img_len=img_len,
+        **kwargs,
     ).eval()
 
     centiles = calculate_centiles(data_set, centile_edits)
@@ -101,7 +94,7 @@ def generate(
     ddpm: DDPM,
     num_generations: int,
     device,
-    shape: tuple = (1, 28, 28),
+    shape: tuple = (3, 64, 64),
 ) -> Float[np.ndarray, "num_generations shape"]:
     # A single call with 256 features, 8 generations and a batch size of 1,
     # takes about 15 seconds.
@@ -114,7 +107,7 @@ def generate(
             shape,
             device,
             verbose=False,
-            store=False
+            store=False,
         )
     return generations.cpu().numpy()
 
@@ -124,7 +117,7 @@ def calculate_centiles(data_set, centiles):
     description = df.describe(centiles)
     out = []
     for c in centiles:
-        out.append(description.loc[f'{int(c * 100)}%'].values[1:])
+        out.append(description.loc[f"{int(c * 100)}%"].values[1:])
     out = np.stack(out)
     del df
     del description

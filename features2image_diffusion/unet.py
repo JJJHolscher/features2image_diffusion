@@ -146,10 +146,7 @@ class ContextUnet(nn.Module):
             # nn.ConvTranspose2d(6 * hidden_size, 2 * hidden_size, 7, 7),
             # otherwise just have 2*hidden_size
             nn.ConvTranspose2d(
-                2 * hidden_size,
-                2 * hidden_size,
-                img_len // 4,
-                img_len // 4
+                2 * hidden_size, 2 * hidden_size, img_len // 4, img_len // 4
             ),
             nn.GroupNorm(8, 2 * hidden_size),
             nn.ReLU(),
@@ -278,7 +275,7 @@ class DDPM(nn.Module):
         size: tuple,  # usually (1, 28, 28)
         device: str,
         verbose: bool = True,
-        store: bool = True
+        store: bool = True,
     ):
         """Generate images guided by the context.
 
@@ -349,13 +346,18 @@ class DDPM(nn.Module):
 def load_ddpm(
     path: Path,
     n_classes: int,
+    n_channels: int,
+    img_len: int,
     hidden_size: int,
     diffusion_steps: int,
     device: str,
 ):
     ddpm = DDPM(
         nn_model=ContextUnet(
-            in_channels=1, hidden_size=hidden_size, n_classes=n_classes
+            in_channels=n_channels,
+            hidden_size=hidden_size,
+            n_classes=n_classes,
+            img_len=img_len,
         ),
         betas=(1e-4, 0.02),
         n_T=diffusion_steps,

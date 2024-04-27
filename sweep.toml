@@ -1,19 +1,22 @@
 
 device = "cuda:0"
-mnist_dir = "./xyz/res/mnist"
+# mnist_dir = "./xyz/res/mnist"
+imagenet_dir = "../sparse_autoencoder/res/imagenet"
+feature_dir = "../sparse_autoencoder/run/1ae3fe65"
+image_size = 64
+n_channels = 3
 
 train = []
 
 [[eval]]
-feature_dir = "../sparse_autoencoder/run/171d21f725b8721bc98f2d334b103d6b0e83570a958c461866fd12c6280a670f"
-model_path = "./xyz/run/7927ad448cfdb96d1e819f599d5ce8a200a3de67068866289c8cf1e0215ec398/model/epoch-22.pth"
+model_path = "./run/f2a2e4ac/model/epoch-39.pth"
 
 diffusion_steps = 400
-hidden_size = 256
+hidden_size = 128
 num_generations = 8
 
 # Leave feature_ids empty for all features.
 feature_ids = []
 centile_edits = [0, 1]
 # 2 data points per label starting with 0
-data_ids = [1, 21, 3, 6, 5, 16, 7, 10, 2, 9, 0, 11, 13, 18, 15, 29, 17, 31, 4, 19]
+data_ids = [1]

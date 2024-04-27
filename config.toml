@@ -1,4 +1,4 @@
-
+debug = false
 device = "cuda:0"
 # mnist_dir = "./res/mnist"
 
