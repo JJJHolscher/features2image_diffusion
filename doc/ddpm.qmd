@@ -1,0 +1,44 @@
+
+# Denoising Diffusion Probabilistic Models
+
+Today, we're reading and summarizing [Ho et al.](https://arxiv.org/pdf/2006.11239)
+I believe their paper to be the first time diffusion models were used for image generation.
+
+![Here is their figure on how images are generated with diffusion](./diffusion-process.png)
+
+The important terms:  
+$\textbf{x}_0$ is the data, $\textbf{x}_T$ is pure noise and any $\textbf{x}_{0<t<T}$ is the data mixed with the noise.  
+$q$ is the forward process, the process of gradually adding Gaussian noise to the data.  
+$p$ is the parameterized backward process, the process of removing noise from data.  
+
+## the forward process
+
+![](./ddpm-eq2.png)
+Where $\beta_t$, the amount of noise added at time step $t$, can be learned or held constant. For simplicity, the authors keep it constant in this paper.
+
+$q$ can then be generalized to
+![](./ddpm-eq4.png)
+where
+![](./ddpm-alpha.png)
+
+Since $\beta_t$ is held constant, the forward process term $L_T$ in the upcoming loss function is kept constant.
+
+
+## the reverse process
+
+The complete loss function decomposes into 3 parts.
+![](./ddpm-loss.png)
+$L_T$ is the ignored loss component of the forward process,  
+$L_{t-1}$ is the reverse process and  
+$L_0$ is the reverse process decoder.  
+
+$L_{t-1}$ is rewritten to ![](./ddpm-eq12.png)
+which, when expressed into pseudocode, is ![](./ddpm-pseudocode.png)
+Intuitively, the model $\epsilon_\theta$ minimizes loss by outputting the noise $\epsilon$ that was added to it's input data, weighted by the forward process's variance at that time step. 
+
+$L_0$ is the last reverse process step. It is responsible for scaling $x_1$ to RGB values.
+
+## simplified
+
+Together, the reverse process is simplified to ![](./ddpm-eq14.png)
+where $t$ is uniform between 1 and $T$. The simplification emphasizes loss at larger $t$'s (when there is more noise) since those are harder for the model to predict.

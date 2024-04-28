@@ -2,5 +2,5 @@
 	path = xyz
 	url = https://github.com/JJJHolscher/features2image_diffusion-xyz
 [submodule "guided-diffusion-pytorch"]
-	path = guided-diffusion-pytorch
+	path = guided_diffusion_pytorch
 	url = https://github.com/openai/guided-diffusion

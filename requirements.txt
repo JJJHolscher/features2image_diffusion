@@ -1,4 +1,5 @@
 argtoml
+blobfile
 build
 debugpy
 jo3mnist
@@ -6,6 +7,7 @@ jo3util
 jupyterlab
 matplotlib
 pyright
+mpi4py
 torch
 torchvision
 tqdm
