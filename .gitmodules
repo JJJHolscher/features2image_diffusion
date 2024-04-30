@@ -4,3 +4,6 @@
 [submodule "guided-diffusion-pytorch"]
 	path = guided_diffusion_pytorch
 	url = https://github.com/openai/guided-diffusion
+[submodule "improved-diffusion-pytorch"]
+	path = improved-diffusion-pytorch
+	url = https://github.com/openai/improved-diffusion
