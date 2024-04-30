@@ -7,9 +7,7 @@ import math
 
 import jax
 import jax.numpy as jnp
-import torch as th
-import torch.nn as nn
-import torch.nn.functional as F
+import equinox as eqx
 
 from .fp16_util import convert_module_to_f16, convert_module_to_f32
 from .nn import (
@@ -24,7 +22,7 @@ from .nn import (
 )
 
 
-class TimestepBlock(nn.Module):
+class TimestepBlock(eqx.Module):
     """
     Any module where forward() takes timestep embeddings as a second argument.
     """

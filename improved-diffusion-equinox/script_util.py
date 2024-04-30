@@ -1,4 +1,4 @@
-import argparse
+from argparse import ArgumentTypeError
 import inspect
 
 from . import gaussian_diffusion as gd
@@ -293,4 +293,4 @@ def str2bool(v):
     elif v.lower() in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise argparse.ArgumentTypeError("boolean value expected")
+        raise ArgumentTypeError("boolean value expected")
