@@ -1,3 +1,6 @@
+train			= true
+sample			= true
+
 # training
 data_dir                = ""
 schedule_sampler        = "uniform"

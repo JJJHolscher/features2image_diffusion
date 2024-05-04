@@ -1,5 +1,4 @@
-import numpy as np
-import torch as th
+import jax.numpy as jnp
 
 from .gaussian_diffusion import GaussianDiffusion
 
@@ -82,7 +81,7 @@ class SpacedDiffusion(GaussianDiffusion):
                 new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
                 last_alpha_cumprod = alpha_cumprod
                 self.timestep_map.append(i)
-        kwargs["betas"] = np.array(new_betas)
+        kwargs["betas"] = jnp.array(new_betas)
         super().__init__(**kwargs)
 
     def p_mean_variance(
@@ -115,7 +114,7 @@ class _WrappedModel:
         self.original_num_steps = original_num_steps
 
     def __call__(self, x, ts, **kwargs):
-        map_tensor = th.tensor(self.timestep_map, device=ts.device, dtype=ts.dtype)
+        map_tensor = self.timestep_map # th.tensor(self.timestep_map, device=ts.device, dtype=ts.dtype)
         new_ts = map_tensor[ts]
         if self.rescale_timesteps:
             new_ts = new_ts.float() * (1000.0 / self.original_num_steps)

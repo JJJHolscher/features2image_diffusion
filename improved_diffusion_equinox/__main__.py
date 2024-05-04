@@ -1,16 +1,16 @@
 #! /usr/bin/env python3
 # vim:fenc=utf-8
 
+from pathlib import Path
 
 import argtoml
+import jax
 
 from . import logger
 from .image_datasets import load_data
 from .resample import create_named_schedule_sampler
-from .script_util import (
-    model_and_diffusion_defaults,
-    create_model_and_diffusion,
-)
+from .script_util import create_model_and_diffusion
+
 from .train import TrainLoop
 
 
@@ -24,10 +24,10 @@ def train_main(args):
 
     logger.log("creating data loader...")
     data = load_data(
-        data_dir=args["data_dir"],
+        feature_dir=args["feature_dir"],
+        image_dir=args["image_dir"],
         batch_size=args["batch_size"],
         image_size=args["image_size"],
-        class_cond=args["class_cond"],
     )
 
     logger.log("training...")
@@ -116,8 +116,9 @@ def sample_main(args):
 
 
 if __name__ == "__main__":
-    O = argtoml.parse_args("improved-diffusion.toml")
+    O = argtoml.parse_args(Path("improved-diffusion.toml"))
+    if "train" in O and O["train"]:
+        train_main(O)
     if "sample" in O and O["sample"]:
         sample_main(O)
-    elif "train" in O and O["train"]:
-        train_main(O)
+    

@@ -2,23 +2,28 @@
 # vim:fenc=utf-8
 
 from abc import abstractmethod
+from typing import List, Callable, Union, Set, Tuple, Optional
 
 import math
 
-import jax
-import jax.numpy as jnp
 import equinox as eqx
+import equinox.nn as nn
+import jax
+import jax.nn as jnn
+import jax.numpy as jnp
+import jax.tree_util as jtu
+from jaxtyping import Float, Array, Int
 
-from .fp16_util import convert_module_to_f16, convert_module_to_f32
+
+# from .fp16_util import convert_module_to_f16, convert_module_to_f32
 from .nn import (
-    SiLU,
+    # SiLU,
     conv_nd,
     linear,
     avg_pool_nd,
     zero_module,
     normalization,
     timestep_embedding,
-    checkpoint,
 )
 
 
@@ -28,28 +33,33 @@ class TimestepBlock(eqx.Module):
     """
 
     @abstractmethod
-    def forward(self, x, emb):
+    def __call__(self, x: Float[Array, "N C ..."], emb, state: nn.State):
         """
         Apply the module to `x` given `emb` timestep embeddings.
         """
+        return x, state
 
 
-class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
+class TimestepEmbedSequential(TimestepBlock):
     """
     A sequential module that passes timestep embeddings to the children that
     support it as an extra input.
     """
+    layers: List[Callable]
 
-    def forward(self, x, emb):
-        for layer in self:
+    def __init__(self, *layers):
+        self.layers = list(layers)
+
+    def __call__(self, x: Float[Array, "N C ..."], emb, state: nn.State):
+        for layer in self.layers:
             if isinstance(layer, TimestepBlock):
-                x = layer(x, emb)
+                x, state = layer(x, emb, state)
             else:
-                x = layer(x)
-        return x
+                x, state = layer(x, state)
+        return x, state
 
 
-class Upsample(nn.Module):
+class Upsample(eqx.Module):
     """
     An upsampling layer with an optional convolution.
 
@@ -58,29 +68,36 @@ class Upsample(nn.Module):
     :param dims: determines if the signal is 1D, 2D, or 3D. If 3D, then
                  upsampling occurs in the inner-two dimensions.
     """
+    channels: int
+    dims: int
+    conv: Optional[nn.Conv]
 
     def __init__(self, channels, use_conv, dims=2):
         super().__init__()
         self.channels = channels
-        self.use_conv = use_conv
         self.dims = dims
         if use_conv:
             self.conv = conv_nd(dims, channels, channels, 3, padding=1)
-
-    def forward(self, x):
-        assert x.shape[1] == self.channels
-        if self.dims == 3:
-            x = F.interpolate(
-                x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
-            )
         else:
-            x = F.interpolate(x, scale_factor=2, mode="nearest")
-        if self.use_conv:
+            self.conv = None
+
+    def __call__(self, x, state):
+        assert x.shape[1] == self.channels
+        # if self.dims == 3:
+            # x = F.interpolate(
+                # x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
+            # )
+        # else:
+            # x = F.interpolate(x, scale_factor=2, mode="nearest")
+        x = jnp.repeat(x, 2, axis=-1)
+        if self.dims > 1:
+            x = jnp.repeat(x, 2, axis=-2)
+        if self.conv:
             x = self.conv(x)
-        return x
+        return x, state
 
 
-class Downsample(nn.Module):
+class Downsample(eqx.Module):
     """
     A downsampling layer with an optional convolution.
 
@@ -101,9 +118,9 @@ class Downsample(nn.Module):
         else:
             self.op = avg_pool_nd(stride)
 
-    def forward(self, x):
+    def __call__(self, x, state):
         assert x.shape[1] == self.channels
-        return self.op(x)
+        return self.op(x), state
 
 
 class ResBlock(TimestepBlock):
@@ -118,7 +135,6 @@ class ResBlock(TimestepBlock):
         convolution instead of a smaller 1x1 convolution to change the
         channels in the skip connection.
     :param dims: determines if the signal is 1D, 2D, or 3D.
-    :param use_checkpoint: if True, use gradient checkpointing on this module.
     """
 
     def __init__(
@@ -130,7 +146,6 @@ class ResBlock(TimestepBlock):
         use_conv=False,
         use_scale_shift_norm=False,
         dims=2,
-        use_checkpoint=False,
     ):
         super().__init__()
         self.channels = channels
@@ -138,29 +153,28 @@ class ResBlock(TimestepBlock):
         self.dropout = dropout
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
-        self.use_checkpoint = use_checkpoint
         self.use_scale_shift_norm = use_scale_shift_norm
 
-        self.in_layers = nn.Sequential(
+        self.in_layers = nn.Sequential([
             normalization(channels),
-            SiLU(),
+            jnn.silu,
             conv_nd(dims, channels, self.out_channels, 3, padding=1),
-        )
-        self.emb_layers = nn.Sequential(
-            SiLU(),
+        ])
+        self.emb_layers = nn.Sequential([
+            jnn.silu,
             linear(
                 emb_channels,
                 2 * self.out_channels if use_scale_shift_norm else self.out_channels,
             ),
-        )
-        self.out_layers = nn.Sequential(
+        ])
+        self.out_layers = nn.Sequential([
             normalization(self.out_channels),
-            SiLU(),
+            jnn.silu,
             nn.Dropout(p=dropout),
             zero_module(
                 conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1)
             ),
-        )
+        ])
 
         if self.out_channels == channels:
             self.skip_connection = nn.Identity()
@@ -171,7 +185,7 @@ class ResBlock(TimestepBlock):
         else:
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
 
-    def forward(self, x, emb):
+    def __call__(self, x, emb, state):
         """
         Apply the block to a Tensor, conditioned on a timestep embedding.
 
@@ -179,65 +193,27 @@ class ResBlock(TimestepBlock):
         :param emb: an [N x emb_channels] Tensor of timestep embeddings.
         :return: an [N x C x ...] Tensor of outputs.
         """
-        return checkpoint(
-            self._forward, (x, emb), self.parameters(), self.use_checkpoint
-        )
-
-    def _forward(self, x, emb):
-        h = self.in_layers(x)
-        emb_out = self.emb_layers(emb).type(h.dtype)
+        h, state = self.in_layers(x)
+        emb_out = self.emb_layers(emb) # .type(h.dtype)
         while len(emb_out.shape) < len(h.shape):
             emb_out = emb_out[..., None]
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = jnp.array_split(emb_out, 2, axis=1)
-            h = out_norm(h) * (1 + scale) + shift
-            h = out_rest(h)
+            h, state = out_norm(h, state) * (1 + scale) + shift
+            h, state = out_rest(h, state)
         else:
             h = h + emb_out
-            h = self.out_layers(h)
-        return self.skip_connection(x) + h
+            h, state = self.out_layers(h, state)
+        return self.skip_connection(x) + h, state
 
 
-class AttentionBlock(nn.Module):
-    """
-    An attention block that allows spatial positions to attend to each other.
-
-    Originally ported from here, but adapted to the N-d case.
-    https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/models/unet.py#L66.
-    """
-
-    def __init__(self, channels, num_heads=1, use_checkpoint=False):
-        super().__init__()
-        self.channels = channels
-        self.num_heads = num_heads
-        self.use_checkpoint = use_checkpoint
-
-        self.norm = normalization(channels)
-        self.qkv = conv_nd(1, channels, channels * 3, 1)
-        self.attention = QKVAttention()
-        self.proj_out = zero_module(conv_nd(1, channels, channels, 1))
-
-    def forward(self, x):
-        return checkpoint(self._forward, (x,), self.parameters(), self.use_checkpoint)
-
-    def _forward(self, x):
-        b, c, *spatial = x.shape
-        x = x.reshape(b, c, -1)
-        qkv = self.qkv(self.norm(x))
-        qkv = qkv.reshape(b * self.num_heads, -1, qkv.shape[2])
-        h = self.attention(qkv)
-        h = h.reshape(b, -1, h.shape[-1])
-        h = self.proj_out(h)
-        return (x + h).reshape(b, c, *spatial)
-
-
-class QKVAttention(nn.Module):
+class QKVAttention(eqx.Module):
     """
     A module which performs QKV attention.
     """
 
-    def forward(self, qkv):
+    def __call__(self, qkv):
         """
         Apply QKV attention.
 
@@ -250,7 +226,7 @@ class QKVAttention(nn.Module):
         weight = jnp.einsum(
             "bct,bcs->bts", q * scale, k * scale
         )  # More stable with f16 than dividing afterwards
-        weight = jax.nn.softmax(weight.float(), dim=-1).type(weight.dtype)
+        weight = jax.nn.softmax(weight, axis=-1)  # weight.float(), dim=-1).type(weight.dtype)
         return jnp.einsum("bts,bcs->bct", weight, v)
 
     @staticmethod
@@ -269,7 +245,7 @@ class QKVAttention(nn.Module):
 
         """
         b, c, *spatial = y[0].shape
-        num_spatial = int(jnp.prod(spatial))
+        num_spatial = int(jnp.prod(jnp.array(spatial)))
         # We perform two matmuls with the same number of ops.
         # The first computes the weight matrix, the second computes
         # the combination of the value vectors.
@@ -277,7 +253,42 @@ class QKVAttention(nn.Module):
         model.total_ops += jnp.array([matmul_ops]) # used to be th.DoubleTensor
 
 
-class UNetModel(nn.Module):
+class AttentionBlock(nn.StatefulLayer):
+    """
+    An attention block that allows spatial positions to attend to each other.
+
+    Originally ported from here, but adapted to the N-d case.
+    https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/models/unet.py#L66.
+    """
+    channels: int
+    num_heads: int
+    norm: nn.GroupNorm
+    qkv: nn.Conv
+    attention: QKVAttention
+    proj_out: nn.Conv
+
+    def __init__(self, channels, num_heads=1):
+        self.channels = channels
+        self.num_heads = num_heads
+
+        self.norm = normalization(channels)
+        self.qkv = conv_nd(1, channels, channels * 3, 1)
+        self.attention = QKVAttention()
+        self.proj_out = zero_module(conv_nd(1, channels, channels, 1))
+
+    def __call__(self, x, state):
+        b, c, *spatial = x.shape
+        x = x.reshape(b, c, -1)
+        qkv, state = self.norm(x, state)
+        qkv = self.qkv(qkv)
+        qkv = qkv.reshape(b * self.num_heads, -1, qkv.shape[2])
+        h = self.attention(qkv)
+        h = h.reshape(b, -1, h.shape[-1])
+        h = self.proj_out(h)
+        return (x + h).reshape(b, c, *spatial), state
+
+
+class UNetModel(eqx.Module):
     """
     The full UNet model with attention and timestep embedding.
 
@@ -296,9 +307,26 @@ class UNetModel(nn.Module):
     :param dims: determines if the signal is 1D, 2D, or 3D.
     :param num_classes: if specified (as an int), then this model will be
         class-conditional with `num_classes` classes.
-    :param use_checkpoint: use gradient checkpointing to reduce memory usage.
     :param num_heads: the number of attention heads in each attention layer.
     """
+    in_channels: int
+    model_channels: int
+    out_channels: int
+    num_res_blocks: int
+    attention_resolutions: Union[Set[int], List[int], Tuple[int]]
+    dropout: float
+    channel_mult: Union[Set[int], List[int], Tuple[int]]
+    conv_resample: bool
+    dims: int
+    num_classes: Optional[int]
+    num_heads: int
+    num_heads_upsample: int
+    time_embed: nn.Sequential
+    label_emb: Optional[nn.Embedding]
+    input_blocks: List[TimestepEmbedSequential]
+    middle_block: TimestepEmbedSequential
+    output_blocks: List[TimestepEmbedSequential]
+    out: nn.Sequential
 
     def __init__(
         self,
@@ -312,7 +340,6 @@ class UNetModel(nn.Module):
         conv_resample=True,
         dims=2,
         num_classes=None,
-        use_checkpoint=False,
         num_heads=1,
         num_heads_upsample=-1,
         use_scale_shift_norm=False,
@@ -331,27 +358,26 @@ class UNetModel(nn.Module):
         self.channel_mult = channel_mult
         self.conv_resample = conv_resample
         self.num_classes = num_classes
-        self.use_checkpoint = use_checkpoint
         self.num_heads = num_heads
         self.num_heads_upsample = num_heads_upsample
 
         time_embed_dim = model_channels * 4
-        self.time_embed = nn.Sequential(
+        self.time_embed = nn.Sequential([
             linear(model_channels, time_embed_dim),
             SiLU(),
             linear(time_embed_dim, time_embed_dim),
-        )
+        ])
 
         if self.num_classes is not None:
             self.label_emb = nn.Embedding(num_classes, time_embed_dim)
+        else:
+            self.label_emb = None
 
-        self.input_blocks = nn.ModuleList(
-            [
-                TimestepEmbedSequential(
-                    conv_nd(dims, in_channels, model_channels, 3, padding=1)
-                )
-            ]
-        )
+        self.input_blocks = [
+            TimestepEmbedSequential(
+                conv_nd(dims, in_channels, model_channels, 3, padding=1)
+            )
+        ]
         input_block_chans = [model_channels]
         ch = model_channels
         ds = 1
@@ -364,7 +390,6 @@ class UNetModel(nn.Module):
                         dropout,
                         out_channels=mult * model_channels,
                         dims=dims,
-                        use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
                     )
                 ]
@@ -372,7 +397,7 @@ class UNetModel(nn.Module):
                 if ds in attention_resolutions:
                     layers.append(
                         AttentionBlock(
-                            ch, use_checkpoint=use_checkpoint, num_heads=num_heads
+                            ch, num_heads=num_heads
                         )
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -390,31 +415,28 @@ class UNetModel(nn.Module):
                 time_embed_dim,
                 dropout,
                 dims=dims,
-                use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
             ),
-            AttentionBlock(ch, use_checkpoint=use_checkpoint, num_heads=num_heads),
+            AttentionBlock(ch, num_heads=num_heads),
             ResBlock(
                 ch,
                 time_embed_dim,
                 dropout,
                 dims=dims,
-                use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
             ),
         )
 
-        self.output_blocks = nn.ModuleList([])
+        self.output_blocks = []
         for level, mult in list(enumerate(channel_mult))[::-1]:
             for i in range(num_res_blocks + 1):
-                layers = [
+                layers: List[eqx.Module] = [
                     ResBlock(
                         ch + input_block_chans.pop(),
                         time_embed_dim,
                         dropout,
                         out_channels=model_channels * mult,
                         dims=dims,
-                        use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
                     )
                 ]
@@ -423,7 +445,6 @@ class UNetModel(nn.Module):
                     layers.append(
                         AttentionBlock(
                             ch,
-                            use_checkpoint=use_checkpoint,
                             num_heads=num_heads_upsample,
                         )
                     )
@@ -432,36 +453,37 @@ class UNetModel(nn.Module):
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
 
-        self.out = nn.Sequential(
+        self.out = nn.Sequential([
             normalization(ch),
             SiLU(),
             zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
-        )
+        ])
 
-    def convert_to_fp16(self):
-        """
-        Convert the torso of the model to float16.
-        """
-        self.input_blocks.apply(convert_module_to_f16)
-        self.middle_block.apply(convert_module_to_f16)
-        self.output_blocks.apply(convert_module_to_f16)
+    # def convert_to_fp16(self):
+        # """
+        # Convert the torso of the model to float16.
+        # """
+        # self.input_blocks.apply(convert_module_to_f16)
+        # self.middle_block.apply(convert_module_to_f16)
+        # self.output_blocks.apply(convert_module_to_f16)
 
-    def convert_to_fp32(self):
-        """
-        Convert the torso of the model to float32.
-        """
-        self.input_blocks.apply(convert_module_to_f32)
-        self.middle_block.apply(convert_module_to_f32)
-        self.output_blocks.apply(convert_module_to_f32)
+    # def convert_to_fp32(self):
+        # """
+        # Convert the torso of the model to float32.
+        # """
+        # self.input_blocks.apply(convert_module_to_f32)
+        # self.middle_block.apply(convert_module_to_f32)
+        # self.output_blocks.apply(convert_module_to_f32)
 
     @property
     def inner_dtype(self):
         """
         Get the dtype used by the torso of the model.
         """
-        return next(self.input_blocks.parameters()).dtype
+        leaves = jtu.tree_leaves(self, is_leaf=eqx.is_array)
+        return leaves[0].dtype
 
-    def forward(self, x, timesteps, y=None):
+    def __call__(self, x: Float[Array, "N C ..."], timesteps: Int[Array, "N"], y: Optional[Float[Array, "N C ..."]], state: nn.State):
         """
         Apply the model to an input batch.
 
@@ -477,11 +499,12 @@ class UNetModel(nn.Module):
         hs = []
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
 
-        if self.num_classes is not None:
+        if y is not None and self.label_emb is not None:
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
 
-        h = x.type(self.inner_dtype)
+        # h = x.type(self.inner_dtype)
+        h = x
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)
@@ -523,27 +546,3 @@ class UNetModel(nn.Module):
             h = module(cat_in, emb)
             result["up"].append(h.type(x.dtype))
         return result
-
-
-class SuperResModel(UNetModel):
-    """
-    A UNetModel that performs super-resolution.
-
-    Expects an extra kwarg `low_res` to condition on a low-resolution image.
-    """
-
-    def __init__(self, in_channels, *args, **kwargs):
-        super().__init__(in_channels * 2, *args, **kwargs)
-
-    def forward(self, x, timesteps, low_res=None, **kwargs):
-        _, _, new_height, new_width = x.shape
-        upsampled = F.interpolate(low_res, (new_height, new_width), mode="bilinear")
-        x = jnp.concat([x, upsampled], axis=1)
-        return super().forward(x, timesteps, **kwargs)
-
-    def get_feature_vectors(self, x, timesteps, low_res=None, **kwargs):
-        _, new_height, new_width, _ = x.shape
-        upsampled = F.interpolate(low_res, (new_height, new_width), mode="bilinear")
-        x = jnp.concat([x, upsampled], axis=1)
-        return super().get_feature_vectors(x, timesteps, **kwargs)
-

@@ -19,3 +19,4 @@ tomli_w
 plotly
 dioxus_widget
 jupytext
+ipykernel
