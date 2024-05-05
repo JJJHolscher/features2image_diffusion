@@ -12,6 +12,7 @@ import math
 
 import jax
 import jax.numpy as jnp
+import jax.random as jrd
 
 from .nn import mean_flat
 from .losses import normal_kl, discretized_gaussian_log_likelihood
@@ -32,8 +33,8 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         scale = 1000 / num_diffusion_timesteps
         beta_start = scale * 0.0001
         beta_end = scale * 0.02
-        return np.linspace(
-            beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
+        return jnp.linspace(
+            beta_start, beta_end, num_diffusion_timesteps, dtype=jnp.float64
         )
     elif schedule_name == "cosine":
         return betas_for_alpha_bar(
@@ -61,7 +62,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
         t1 = i / num_diffusion_timesteps
         t2 = (i + 1) / num_diffusion_timesteps
         betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
-    return np.array(betas)
+    return jnp.array(betas)
 
 
 class ModelMeanType(enum.Enum):
@@ -132,7 +133,7 @@ class GaussianDiffusion:
         self.rescale_timesteps = rescale_timesteps
 
         # Use float64 for accuracy.
-        betas = np.array(betas, dtype=np.float64)
+        betas = jnp.array(betas, dtype=jnp.float64)
         self.betas = betas
         assert len(betas.shape) == 1, "betas must be 1-D"
         assert (betas > 0).all() and (betas <= 1).all()
@@ -140,17 +141,17 @@ class GaussianDiffusion:
         self.num_timesteps = int(betas.shape[0])
 
         alphas = 1.0 - betas
-        self.alphas_cumprod = np.cumprod(alphas, axis=0)
-        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1])
-        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0)
+        self.alphas_cumprod = jnp.cumprod(alphas, axis=0)
+        self.alphas_cumprod_prev = jnp.append(1.0, self.alphas_cumprod[:-1])
+        self.alphas_cumprod_next = jnp.append(self.alphas_cumprod[1:], 0.0)
         assert self.alphas_cumprod_prev.shape == (self.num_timesteps,)
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.sqrt_alphas_cumprod = np.sqrt(self.alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = np.sqrt(1.0 - self.alphas_cumprod)
-        self.log_one_minus_alphas_cumprod = np.log(1.0 - self.alphas_cumprod)
-        self.sqrt_recip_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod)
-        self.sqrt_recipm1_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod - 1)
+        self.sqrt_alphas_cumprod = jnp.sqrt(self.alphas_cumprod)
+        self.sqrt_one_minus_alphas_cumprod = jnp.sqrt(1.0 - self.alphas_cumprod)
+        self.log_one_minus_alphas_cumprod = jnp.log(1.0 - self.alphas_cumprod)
+        self.sqrt_recip_alphas_cumprod = jnp.sqrt(1.0 / self.alphas_cumprod)
+        self.sqrt_recipm1_alphas_cumprod = jnp.sqrt(1.0 / self.alphas_cumprod - 1)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         self.posterior_variance = (
@@ -158,15 +159,15 @@ class GaussianDiffusion:
         )
         # log calculation clipped because the posterior variance is 0 at the
         # beginning of the diffusion chain.
-        self.posterior_log_variance_clipped = np.log(
-            np.append(self.posterior_variance[1], self.posterior_variance[1:])
+        self.posterior_log_variance_clipped = jnp.log(
+            jnp.append(self.posterior_variance[1], self.posterior_variance[1:])
         )
         self.posterior_mean_coef1 = (
-            betas * np.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+            betas * jnp.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         )
         self.posterior_mean_coef2 = (
             (1.0 - self.alphas_cumprod_prev)
-            * np.sqrt(alphas)
+            * jnp.sqrt(alphas)
             / (1.0 - self.alphas_cumprod)
         )
 
@@ -273,7 +274,7 @@ class GaussianDiffusion:
                 min_log = _extract_into_tensor(
                     self.posterior_log_variance_clipped, t, x.shape
                 )
-                max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
+                max_log = _extract_into_tensor(jnp.log(self.betas), t, x.shape)
                 # The model_var_values is [-1, 1] for [min_var, max_var].
                 frac = (model_var_values + 1) / 2
                 model_log_variance = frac * max_log + (1 - frac) * min_log
@@ -283,8 +284,8 @@ class GaussianDiffusion:
                 # for fixedlarge, we set the initial (log-)variance like so
                 # to get a better decoder log likelihood.
                 ModelVarType.FIXED_LARGE: (
-                    np.append(self.posterior_variance[1], self.betas[1:]),
-                    np.log(np.append(self.posterior_variance[1], self.betas[1:])),
+                    jnp.append(self.posterior_variance[1], self.betas[1:]),
+                    jnp.log(jnp.append(self.posterior_variance[1], self.betas[1:])),
                 ),
                 ModelVarType.FIXED_SMALL: (
                     self.posterior_variance,
@@ -394,11 +395,12 @@ class GaussianDiffusion:
         self,
         model,
         shape,
+        key,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
         model_kwargs=None,
-        device=None,
+        # device=None,
         progress=False,
     ):
         """
@@ -426,16 +428,19 @@ class GaussianDiffusion:
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
             model_kwargs=model_kwargs,
-            device=device,
+            # device=device,
             progress=progress,
+            key=key,
         ):
             final = sample
+        assert final is not None
         return final["sample"]
 
     def p_sample_loop_progressive(
         self,
         model,
         shape,
+        key,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
@@ -456,7 +461,8 @@ class GaussianDiffusion:
         if noise is not None:
             img = noise
         else:
-            img = jax.random.normal(key, shape)  # th.randn(*shape, device=device)
+            key, subkey = jrd.split(key)
+            img = jrd.normal(subkey, shape)  # th.randn(*shape, device=device)
         indices = list(range(self.num_timesteps))[::-1]
 
         if progress:
@@ -465,8 +471,9 @@ class GaussianDiffusion:
 
             indices = tqdm(indices)
 
-        for i in indices:
-            t = jnp.array([i] * shape[0], device=device)
+        keys = jrd.split(key, len(indices))
+        for i, key in zip(indices, key):
+            t = jnp.array([i] * shape[0]) # , device=device)
             # with th.no_grad():
             out = self.p_sample(
                 model,
@@ -475,6 +482,7 @@ class GaussianDiffusion:
                 clip_denoised=clip_denoised,
                 denoised_fn=denoised_fn,
                 model_kwargs=model_kwargs,
+                key=key
             )
             yield out
             img = out["sample"]
@@ -511,13 +519,13 @@ class GaussianDiffusion:
         sigma = (
             eta
             * jnp.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar))
-            * tjnp.sqrt(1 - alpha_bar / alpha_bar_prev)
+            * jnp.sqrt(1 - alpha_bar / alpha_bar_prev)
         )
         # Equation 12.
         noise = jax.random.normal(key, x.shape)
         mean_pred = (
-            out["pred_xstart"] * th.sqrt(alpha_bar_prev)
-            + th.sqrt(1 - alpha_bar_prev - sigma ** 2) * eps
+            out["pred_xstart"] * jnp.sqrt(alpha_bar_prev)
+            + jnp.sqrt(1 - alpha_bar_prev - sigma ** 2) * eps
         )
         nonzero_mask = (
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
@@ -567,6 +575,7 @@ class GaussianDiffusion:
         self,
         model,
         shape,
+        key,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
@@ -591,15 +600,17 @@ class GaussianDiffusion:
             device=device,
             progress=progress,
             eta=eta,
+            key=key,
         ):
             final = sample
+        assert final is not None
         return final["sample"]
 
     def ddim_sample_loop_progressive(
         self,
         model,
         shape,
-        key=None,
+        key,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
@@ -620,8 +631,8 @@ class GaussianDiffusion:
         if noise is not None:
             img = noise
         else:
-            assert key is not None
-            img = jax.random.normal(key, shape)  # th.randn(*shape, device=device)
+            key, subkey = jrd.split(key)
+            img = jax.random.normal(subkey, shape)  # th.randn(*shape, device=device)
         indices = list(range(self.num_timesteps))[::-1]
 
         if progress:
@@ -630,8 +641,9 @@ class GaussianDiffusion:
 
             indices = tqdm(indices)
 
-        for i in indices:
-            t = jnp.arrey([i] * shape[0], device=device)
+        keys = jrd.split(key, len(indices))
+        for i, key in zip(indices, keys):
+            t = jnp.array([i] * shape[0])  # , device=device)
             # with th.no_grad():
             out = self.ddim_sample(
                 model,
@@ -641,6 +653,7 @@ class GaussianDiffusion:
                 denoised_fn=denoised_fn,
                 model_kwargs=model_kwargs,
                 eta=eta,
+                key=key
             )
             yield out
             img = out["sample"]
@@ -667,13 +680,13 @@ class GaussianDiffusion:
         kl = normal_kl(
             true_mean, true_log_variance_clipped, out["mean"], out["log_variance"]
         )
-        kl = mean_flat(kl) / np.log(2.0)
+        kl = mean_flat(kl) / jnp.log(2.0)
 
         decoder_nll = -discretized_gaussian_log_likelihood(
             x_start, means=out["mean"], log_scales=0.5 * out["log_variance"]
         )
         assert decoder_nll.shape == x_start.shape
-        decoder_nll = mean_flat(decoder_nll) / np.log(2.0)
+        decoder_nll = mean_flat(decoder_nll) / jnp.log(2.0)
 
         # At the first timestep return the decoder NLL,
         # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
@@ -697,7 +710,7 @@ class GaussianDiffusion:
             model_kwargs = {}
         if noise is None:
             assert key is not None
-            noise = jax.random.normal(key, x_shart.shape)  # th.randn_like(x_start)
+            noise = jrd.normal(key, x_start.shape)  # th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise)
 
         terms = {}
@@ -725,9 +738,9 @@ class GaussianDiffusion:
                 model_output, model_var_values = jnp.split(model_output, C, axis=1)
                 # Learn the variance using the variational bound, but don't let
                 # it affect our mean prediction.
-                frozen_out = jnp.concat([model_output.detach(), model_var_values], axis=1)
+                frozen_out = jnp.concat([model_output, model_var_values], axis=1)
                 terms["vb"] = self._vb_terms_bpd(
-                    model=lambda *args, r=frozen_out: r,
+                    model=lambda *_, r=frozen_out: r,
                     x_start=x_start,
                     x_t=x_t,
                     t=t,
@@ -772,7 +785,7 @@ class GaussianDiffusion:
         kl_prior = normal_kl(
             mean1=qt_mean, logvar1=qt_log_variance, mean2=0.0, logvar2=0.0
         )
-        return mean_flat(kl_prior) / np.log(2.0)
+        return mean_flat(kl_prior) / jnp.log(2.0)
 
     def calc_bpd_loop(self, model, x_start, key, clip_denoised=True, model_kwargs=None):
         """
@@ -792,7 +805,7 @@ class GaussianDiffusion:
                  - xstart_mse: an [N x T] tensor of x_0 MSEs for each timestep.
                  - mse: an [N x T] tensor of epsilon MSEs for each timestep.
         """
-        device = x_start.device
+        # device = x_start.device
         batch_size = x_start.shape[0]
 
         vb = []
@@ -822,7 +835,7 @@ class GaussianDiffusion:
         mse = jnp.stack(mse, axis=1)
 
         prior_bpd = self._prior_bpd(x_start)
-        total_bpd = vb.sum(dim=1) + prior_bpd
+        total_bpd = vb.sum(axis=1) + prior_bpd
         return {
             "total_bpd": total_bpd,
             "prior_bpd": prior_bpd,

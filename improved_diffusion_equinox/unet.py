@@ -11,18 +11,15 @@ import equinox.nn as nn
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
+import jax.random as jrd
 import jax.tree_util as jtu
 from jaxtyping import Float, Array, Int
 
 
 # from .fp16_util import convert_module_to_f16, convert_module_to_f32
 from .nn import (
-    # SiLU,
-    conv_nd,
-    linear,
     avg_pool_nd,
     zero_module,
-    normalization,
     timestep_embedding,
 )
 
@@ -33,11 +30,11 @@ class TimestepBlock(eqx.Module):
     """
 
     @abstractmethod
-    def __call__(self, x: Float[Array, "N C ..."], emb, state: nn.State):
+    def __call__(self, x: Float[Array, "N C ..."], emb):
         """
         Apply the module to `x` given `emb` timestep embeddings.
         """
-        return x, state
+        return x
 
 
 class TimestepEmbedSequential(TimestepBlock):
@@ -50,13 +47,13 @@ class TimestepEmbedSequential(TimestepBlock):
     def __init__(self, *layers):
         self.layers = list(layers)
 
-    def __call__(self, x: Float[Array, "N C ..."], emb, state: nn.State):
+    def __call__(self, x: Float[Array, "N C ..."], emb):
         for layer in self.layers:
             if isinstance(layer, TimestepBlock):
-                x, state = layer(x, emb, state)
+                x = layer(x, emb)
             else:
-                x, state = layer(x, state)
-        return x, state
+                x = layer(x)
+        return ,
 
 
 class Upsample(eqx.Module):
@@ -72,16 +69,18 @@ class Upsample(eqx.Module):
     dims: int
     conv: Optional[nn.Conv]
 
-    def __init__(self, channels, use_conv, dims=2):
+    def __init__(self, channels, use_conv, dims=2, key=None):
         super().__init__()
         self.channels = channels
         self.dims = dims
         if use_conv:
-            self.conv = conv_nd(dims, channels, channels, 3, padding=1)
+            if key is None:
+                raise ValueError
+            self.conv = nn.Conv(dims, channels, channels, 3, padding=1, key=key)
         else:
             self.conv = None
 
-    def __call__(self, x, state):
+    def __call__(self, x):
         assert x.shape[1] == self.channels
         # if self.dims == 3:
             # x = F.interpolate(
@@ -94,7 +93,7 @@ class Upsample(eqx.Module):
             x = jnp.repeat(x, 2, axis=-2)
         if self.conv:
             x = self.conv(x)
-        return x, state
+        return ,
 
 
 class Downsample(eqx.Module):
@@ -106,21 +105,25 @@ class Downsample(eqx.Module):
     :param dims: determines if the signal is 1D, 2D, or 3D. If 3D, then
                  downsampling occurs in the inner-two dimensions.
     """
+    channels: int
+    use_conv: bool
+    dims: int
+    op: Callable
 
-    def __init__(self, channels, use_conv, dims=2):
+    def __init__(self, channels, use_conv, key, dims=2):
         super().__init__()
         self.channels = channels
         self.use_conv = use_conv
         self.dims = dims
         stride = 2 if dims != 3 else (1, 2, 2)
         if use_conv:
-            self.op = conv_nd(dims, channels, channels, 3, stride=stride, padding=1)
+            self.op = nn.Conv(dims, channels, channels, 3, stride=stride, padding=1, key=key)
         else:
             self.op = avg_pool_nd(stride)
 
-    def __call__(self, x, state):
+    def __call__(self, x):
         assert x.shape[1] == self.channels
-        return self.op(x), state
+        return self.op(x,
 
 
 class ResBlock(TimestepBlock):
@@ -136,12 +139,23 @@ class ResBlock(TimestepBlock):
         channels in the skip connection.
     :param dims: determines if the signal is 1D, 2D, or 3D.
     """
+    channels: int
+    emb_channels: int
+    dropout: float
+    out_channels: int
+    use_conv: bool
+    use_scale_shift_norm: bool
+    in_layers: nn.Sequential
+    emb_layers: nn.Sequential
+    out_layers: nn.Sequential
+    skip_connection: Callable
 
     def __init__(
         self,
         channels,
         emb_channels,
         dropout,
+        key,
         out_channels=None,
         use_conv=False,
         use_scale_shift_norm=False,
@@ -155,37 +169,39 @@ class ResBlock(TimestepBlock):
         self.use_conv = use_conv
         self.use_scale_shift_norm = use_scale_shift_norm
 
+        k0, k1, k2, k3 = jrd.split(key, 4)
         self.in_layers = nn.Sequential([
-            normalization(channels),
+            nn.GroupNorm(32, channels),
             jnn.silu,
-            conv_nd(dims, channels, self.out_channels, 3, padding=1),
+            nn.Conv(dims, channels, self.out_channels, 3, padding=1, key=k0),
         ])
         self.emb_layers = nn.Sequential([
             jnn.silu,
-            linear(
+            nn.Linear(
                 emb_channels,
                 2 * self.out_channels if use_scale_shift_norm else self.out_channels,
+                key=k1
             ),
         ])
         self.out_layers = nn.Sequential([
-            normalization(self.out_channels),
+            nn.GroupNorm(32, self.out_channels),
             jnn.silu,
             nn.Dropout(p=dropout),
             zero_module(
-                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1)
+                nn.Conv(dims, self.out_channels, self.out_channels, 3, padding=1, key=k2)
             ),
         ])
 
         if self.out_channels == channels:
             self.skip_connection = nn.Identity()
         elif use_conv:
-            self.skip_connection = conv_nd(
-                dims, channels, self.out_channels, 3, padding=1
+            self.skip_connection = nn.Conv(
+                dims, channels, self.out_channels, 3, padding=1, key=k3
             )
         else:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
+            self.skip_connection = nn.Conv(dims, channels, self.out_channels, 1, key=k3)
 
-    def __call__(self, x, emb, state):
+    def __call__(self, x, emb):
         """
         Apply the block to a Tensor, conditioned on a timestep embedding.
 
@@ -193,19 +209,19 @@ class ResBlock(TimestepBlock):
         :param emb: an [N x emb_channels] Tensor of timestep embeddings.
         :return: an [N x C x ...] Tensor of outputs.
         """
-        h, state = self.in_layers(x)
+        h = self.in_layers(x)
         emb_out = self.emb_layers(emb) # .type(h.dtype)
         while len(emb_out.shape) < len(h.shape):
             emb_out = emb_out[..., None]
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = jnp.array_split(emb_out, 2, axis=1)
-            h, state = out_norm(h, state) * (1 + scale) + shift
-            h, state = out_rest(h, state)
+            h = out_norm(h) * (1 + scale) + shift
+            h = out_rest(h)
         else:
             h = h + emb_out
-            h, state = self.out_layers(h, state)
-        return self.skip_connection(x) + h, state
+            h = self.out_layers(h)
+        return self.skip_connection(x) + h
 
 
 class QKVAttention(eqx.Module):
@@ -267,25 +283,26 @@ class AttentionBlock(nn.StatefulLayer):
     attention: QKVAttention
     proj_out: nn.Conv
 
-    def __init__(self, channels, num_heads=1):
+    def __init__(self, channels, *, key, num_heads=1):
         self.channels = channels
         self.num_heads = num_heads
 
-        self.norm = normalization(channels)
-        self.qkv = conv_nd(1, channels, channels * 3, 1)
+        k0, k1 = jrd.split(key)
+        self.norm = nn.GroupNorm(32, channels)
+        self.qkv = nn.Conv(1, channels, channels * 3, 1, key=k0)
         self.attention = QKVAttention()
-        self.proj_out = zero_module(conv_nd(1, channels, channels, 1))
+        self.proj_out = zero_module(nn.Conv(1, channels, channels, 1, key=k1))
 
-    def __call__(self, x, state):
+    def __call__(self, x):
         b, c, *spatial = x.shape
         x = x.reshape(b, c, -1)
-        qkv, state = self.norm(x, state)
+        qkv = self.norm(x)
         qkv = self.qkv(qkv)
         qkv = qkv.reshape(b * self.num_heads, -1, qkv.shape[2])
         h = self.attention(qkv)
         h = h.reshape(b, -1, h.shape[-1])
         h = self.proj_out(h)
-        return (x + h).reshape(b, c, *spatial), state
+        return (x + h).reshape(b, c, *spatial,
 
 
 class UNetModel(eqx.Module):
@@ -317,7 +334,6 @@ class UNetModel(eqx.Module):
     dropout: float
     channel_mult: Union[Set[int], List[int], Tuple[int]]
     conv_resample: bool
-    dims: int
     num_classes: Optional[int]
     num_heads: int
     num_heads_upsample: int
@@ -335,6 +351,7 @@ class UNetModel(eqx.Module):
         out_channels,
         num_res_blocks,
         attention_resolutions,
+        key,
         dropout=0,
         channel_mult=(1, 2, 4, 8),
         conv_resample=True,
@@ -361,11 +378,12 @@ class UNetModel(eqx.Module):
         self.num_heads = num_heads
         self.num_heads_upsample = num_heads_upsample
 
+        key, k0, k1, k2, k3, k4, k5 = jrd.split(key, 7)
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential([
-            linear(model_channels, time_embed_dim),
-            SiLU(),
-            linear(time_embed_dim, time_embed_dim),
+            nn.Linear(model_channels, time_embed_dim, key=k0),
+            jnn.silu,
+            nn.Linear(time_embed_dim, time_embed_dim, key=k1),
         ])
 
         if self.num_classes is not None:
@@ -375,7 +393,7 @@ class UNetModel(eqx.Module):
 
         self.input_blocks = [
             TimestepEmbedSequential(
-                conv_nd(dims, in_channels, model_channels, 3, padding=1)
+                nn.Conv(dims, in_channels, model_channels, 3, padding=1, key=k2)
             )
         ]
         input_block_chans = [model_channels]
@@ -383,6 +401,7 @@ class UNetModel(eqx.Module):
         ds = 1
         for level, mult in enumerate(channel_mult):
             for _ in range(num_res_blocks):
+                key, subkey = jrd.split(key)
                 layers = [
                     ResBlock(
                         ch,
@@ -391,20 +410,23 @@ class UNetModel(eqx.Module):
                         out_channels=mult * model_channels,
                         dims=dims,
                         use_scale_shift_norm=use_scale_shift_norm,
+                        key=subkey
                     )
                 ]
                 ch = mult * model_channels
                 if ds in attention_resolutions:
+                    key, subkey = jrd.split(key)
                     layers.append(
                         AttentionBlock(
-                            ch, num_heads=num_heads
+                            ch, num_heads=num_heads, key=subkey
                         )
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
                 input_block_chans.append(ch)
             if level != len(channel_mult) - 1:
+                key, subkey = jrd.split(key)
                 self.input_blocks.append(
-                    TimestepEmbedSequential(Downsample(ch, conv_resample, dims=dims))
+                    TimestepEmbedSequential(Downsample(ch, conv_resample, dims=dims, key=subkey))
                 )
                 input_block_chans.append(ch)
                 ds *= 2
@@ -416,20 +438,23 @@ class UNetModel(eqx.Module):
                 dropout,
                 dims=dims,
                 use_scale_shift_norm=use_scale_shift_norm,
+                key=k3
             ),
-            AttentionBlock(ch, num_heads=num_heads),
+            AttentionBlock(ch, num_heads=num_heads, key=k4),
             ResBlock(
                 ch,
                 time_embed_dim,
                 dropout,
                 dims=dims,
                 use_scale_shift_norm=use_scale_shift_norm,
+                key=k5
             ),
         )
 
         self.output_blocks = []
         for level, mult in list(enumerate(channel_mult))[::-1]:
             for i in range(num_res_blocks + 1):
+                key, subkey = jrd.split(key)
                 layers: List[eqx.Module] = [
                     ResBlock(
                         ch + input_block_chans.pop(),
@@ -438,25 +463,29 @@ class UNetModel(eqx.Module):
                         out_channels=model_channels * mult,
                         dims=dims,
                         use_scale_shift_norm=use_scale_shift_norm,
+                        key=subkey
                     )
                 ]
                 ch = model_channels * mult
                 if ds in attention_resolutions:
+                    key, subkey = jrd.split(key)
                     layers.append(
                         AttentionBlock(
                             ch,
                             num_heads=num_heads_upsample,
+                            key=subkey
                         )
                     )
                 if level and i == num_res_blocks:
-                    layers.append(Upsample(ch, conv_resample, dims=dims))
+                    key, subkey = jrd.split(key)
+                    layers.append(Upsample(ch, conv_resample, dims=dims, key=subkey))
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
 
         self.out = nn.Sequential([
-            normalization(ch),
-            SiLU(),
-            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
+            nn.GroupNorm(32, ch),
+            jnn.silu,
+            zero_module(nn.Conv(dims, model_channels, out_channels, 3, padding=1, key=key)),
         ])
 
     # def convert_to_fp16(self):
@@ -483,7 +512,7 @@ class UNetModel(eqx.Module):
         leaves = jtu.tree_leaves(self, is_leaf=eqx.is_array)
         return leaves[0].dtype
 
-    def __call__(self, x: Float[Array, "N C ..."], timesteps: Int[Array, "N"], y: Optional[Float[Array, "N C ..."]], state: nn.State):
+    def __call__(self, x: Float[Array, "N C ..."], timesteps: Int[Array, "N"], y: Optional[Float[Array, "N C .."]]):
         """
         Apply the model to an input batch.
 
@@ -512,7 +541,7 @@ class UNetModel(eqx.Module):
         for module in self.output_blocks:
             cat_in = jnp.concat([h, hs.pop()], axis=1)
             h = module(cat_in, emb)
-        h = h.type(x.dtype)
+        h = h.astype(x.dtype)
         return self.out(h)
 
     def get_feature_vectors(self, x, timesteps, y=None):
@@ -531,18 +560,20 @@ class UNetModel(eqx.Module):
         hs = []
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
         if self.num_classes is not None:
+            if y is None or self.label_emb is None:
+                raise ValueError
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
         result = dict(down=[], up=[])
-        h = x.type(self.inner_dtype)
+        h = x.astype(self.inner_dtype)
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)
-            result["down"].append(h.type(x.dtype))
+            result["down"].append(h.astype(x.dtype))
         h = self.middle_block(h, emb)
-        result["middle"] = h.type(x.dtype)
+        result["middle"] = h.astype(x.dtype)
         for module in self.output_blocks:
             cat_in = jnp.concat([h, hs.pop()], axis=1)
             h = module(cat_in, emb)
-            result["up"].append(h.type(x.dtype))
+            result["up"].append(h.astype(x.dtype))
         return result

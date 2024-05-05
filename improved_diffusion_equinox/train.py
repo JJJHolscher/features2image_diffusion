@@ -7,8 +7,10 @@ import os
 
 import blobfile as bf
 import jax.numpy as jnp
+import jax.random as jrd
+import optax
 
-from . import dist_util, logger
+from . import logger #, dist_util
 from .fp16_util import (
     make_master_params,
     master_params_to_model_params,
@@ -17,7 +19,7 @@ from .fp16_util import (
     zero_grad,
 )
 from .nn import update_ema
-from .resample import LossAwareSampler, UniformSampler
+from .resample import LossSecondMomentResampler, UniformSampler
 
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
@@ -67,17 +69,18 @@ class TrainLoop:
 
         self.step = 0
         self.resume_step = 0
-        self.global_batch = self.batch_size * dist.get_world_size()
+        self.global_batch = self.batch_size  # * dist.get_world_size()
 
-        self.model_params = list(self.model.parameters())
-        self.master_params = self.model_params
+        # self.model_params = list(self.model.parameters())
+        # self.master_params = self.model_params
         self.lg_loss_scale = INITIAL_LOG_LOSS_SCALE
 
         self._load_and_sync_parameters()
         if self.use_fp16:
             self._setup_fp16()
 
-        self.opt = AdamW(self.master_params, lr=self.lr, weight_decay=self.weight_decay)
+        # self.opt = AdamW(self.master_params, lr=self.lr, weight_decay=self.weight_decay)
+        self.opt = optax.adamw(self.lr, weight_decay=self.weight_decay)
         if self.resume_step:
             self._load_optimizer_state()
             # Model was resumed, either due to a restart or a checkpoint
@@ -98,15 +101,14 @@ class TrainLoop:
 
         if resume_checkpoint:
             self.resume_step = parse_resume_step_from_filename(resume_checkpoint)
-            if dist.get_rank() == 0:
-                logger.log(f"loading model from checkpoint: {resume_checkpoint}...")
-                self.model.load_state_dict(
-                    dist_util.load_state_dict(
-                        resume_checkpoint, map_location=dist_util.dev()
-                    )
-                )
+            # if dist.get_rank() == 0:
+            logger.log(f"loading model from checkpoint: {resume_checkpoint}...")
+            self.model.load_state_dict(resume_checkpoint)
+            # (dist_util.load_state_dict(
+                    # resume_checkpoint, map_location=dist_util.dev()
+            # ))
 
-        dist_util.sync_params(self.model.parameters())
+        # dist_util.sync_params(self.model.parameters())
 
     def _load_ema_parameters(self, rate):
         ema_params = copy.deepcopy(self.master_params)
@@ -140,13 +142,14 @@ class TrainLoop:
         self.master_params = make_master_params(self.model_params)
         self.model.convert_to_fp16()
 
-    def run_loop(self):
+    def run_loop(self, key):
         while (
             not self.lr_anneal_steps
             or self.step + self.resume_step < self.lr_anneal_steps
         ):
             batch, cond = next(self.data)
-            self.run_step(batch, cond)
+            key, subkey = jrd.split(key)
+            self.run_step(batch, cond, subkey)
             if self.step % self.log_interval == 0:
                 logger.dumpkvs()
             if self.step % self.save_interval == 0:
@@ -159,24 +162,25 @@ class TrainLoop:
         if (self.step - 1) % self.save_interval != 0:
             self.save()
 
-    def run_step(self, batch, cond):
-        self.forward_backward(batch, cond)
+    def run_step(self, batch, cond, key):
+        self.forward_backward(batch, cond, key)
         if self.use_fp16:
             self.optimize_fp16()
         else:
             self.optimize_normal()
         self.log_step()
 
-    def forward_backward(self, batch, cond):
+    def forward_backward(self, batch, cond, key):
         zero_grad(self.model_params)
         for i in range(0, batch.shape[0], self.microbatch):
-            micro = batch[i : i + self.microbatch].to(dist_util.dev())
+            micro = batch[i : i + self.microbatch]  # .to(dist_util.dev())
             micro_cond = {
-                k: v[i : i + self.microbatch].to(dist_util.dev())
+                k: v[i : i + self.microbatch]  # to(dist_util.dev())
                 for k, v in cond.items()
             }
             last_batch = (i + self.microbatch) >= batch.shape[0]
-            t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
+            key, subkey = jrd.split(key)
+            t, weights = self.schedule_sampler.sample(micro.shape[0], key=subkey) # , dist_util.dev())
 
             compute_losses = functools.partial(
                 self.diffusion.training_losses,
@@ -192,7 +196,7 @@ class TrainLoop:
                 with self.ddp_model.no_sync():
                     losses = compute_losses()
 
-            if isinstance(self.schedule_sampler, LossAwareSampler):
+            if isinstance(self.schedule_sampler, LossSecondMomentResampler):
                 self.schedule_sampler.update_with_local_losses(
                     t, losses["loss"].detach()
                 )

@@ -10,6 +10,7 @@ import equinox as eqx
 import equinox.nn as nn
 import jax.numpy as jnp
 import jax.nn as jnn
+import jax.tree_util as jtu
 
 
 # PyTorch 1.7 has SiLU, but we support PyTorch 1.5.
@@ -21,26 +22,6 @@ import jax.nn as jnn
 # class GroupNorm32(nn.GroupNorm):
     # def forward(self, x):
         # return super().forward(x.float()).type(x.dtype)
-
-
-def conv_nd(dims, *args, **kwargs):
-    """
-    Create a 1D, 2D, or 3D convolution module.
-    """
-    if dims == 1:
-        return nn.Conv1d(*args, **kwargs)
-    elif dims == 2:
-        return nn.Conv2d(*args, **kwargs)
-    elif dims == 3:
-        return nn.Conv3d(*args, **kwargs)
-    raise ValueError(f"unsupported dimensions: {dims}")
-
-
-def linear(*args, **kwargs):
-    """
-    Create a linear module.
-    """
-    return nn.Linear(*args, **kwargs)
 
 
 def avg_pool_nd(dims, *args, **kwargs):
@@ -73,8 +54,8 @@ def zero_module(module):
     """
     Zero out the parameters of a module and return it.
     """
-    for p in module.parameters():
-        p.detach().zero_()
+    eqx.tree_at(lambda m: m.weight, module, jnp.zeros_like(module.weight))
+    eqx.tree_at(lambda m: m.bias, module, jnp.zeros_like(module.bias))
     return module
 
 
@@ -94,14 +75,7 @@ def mean_flat(tensor):
     return tensor.mean(dim=list(range(1, len(tensor.shape))))
 
 
-def normalization(channels):
-    """
-    Make a standard normalization layer.
-
-    :param channels: number of input channels.
-    :return: an nn.Module for normalization.
-    """
-    return nn.GroupNorm(32, channels)
+    
 
 
 def timestep_embedding(timesteps, dim, max_period=10000):

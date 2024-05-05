@@ -5,6 +5,8 @@ from pathlib import Path
 
 import argtoml
 import jax
+import jax.random as jrd
+import jax.numpy as jnp
 
 from . import logger
 from .image_datasets import load_data
@@ -16,9 +18,11 @@ from .train import TrainLoop
 
 def train_main(args):
     logger.configure()
+    key = jrd.PRNGKey(args["seed"])
+    keys = jrd.split(key, 2)
 
     logger.log("creating model and diffusion...")
-    model, diffusion = create_model_and_diffusion(**args)
+    model, diffusion = create_model_and_diffusion(**args["architecture"], key=keys[0])
     # model.to(dist_util.dev())
     schedule_sampler = create_named_schedule_sampler(args["schedule_sampler"], diffusion)
 
@@ -27,7 +31,7 @@ def train_main(args):
         feature_dir=args["feature_dir"],
         image_dir=args["image_dir"],
         batch_size=args["batch_size"],
-        image_size=args["image_size"],
+        image_size=args["architecture"]["image_size"],
     )
 
     logger.log("training...")
@@ -47,7 +51,7 @@ def train_main(args):
         schedule_sampler=schedule_sampler,
         weight_decay=args["weight_decay"],
         lr_anneal_steps=args["lr_anneal_steps"],
-    ).run_loop()
+    ).run_loop(key=keys[1])
 
 
 def sample_main(args):
@@ -69,9 +73,8 @@ def sample_main(args):
     while len(all_images) * args["batch_size"] < args["num_samples"]:
         model_kwargs = {}
         if args["class_cond"]:
-            classes = jax.rand.randint(
-                key=key, low=0, high=NUM_CLASSES, size=(args["batch_size"],), device=dist_util.dev()
-            )
+            classes = jrd.randint(
+                key=key, minval=0, maxval=NUM_CLASSES, shape=(args["batch_size"],)) #, device=dist_util.dev())
             model_kwargs["y"] = classes
         sample_fn = (
             diffusion.p_sample_loop if not args["use_ddim"] else diffusion.ddim_sample_loop
@@ -100,7 +103,7 @@ def sample_main(args):
     arr = np.concatenate(all_images, axis=0)
     arr = arr[: args["num_samples"]]
     if args["class_cond"]:
-        label_arr = np.concatenate(all_labels, axis=0)
+        label_arr = jnp.concatenate(all_labels, axis=0)
         label_arr = label_arr[: args["num_samples"]]
     if dist.get_rank() == 0:
         shape_str = "x".join([str(x) for x in arr.shape])
@@ -117,6 +120,9 @@ def sample_main(args):
 
 if __name__ == "__main__":
     O = argtoml.parse_args(Path("improved-diffusion.toml"))
+    jax.config.update("jax_numpy_dtype_promotion", "strict")
+    jax.config.update("jax_disable_jit", True)
+    jax.config.update("jax_enable_x64", True)
     if "train" in O and O["train"]:
         train_main(O)
     if "sample" in O and O["sample"]:
