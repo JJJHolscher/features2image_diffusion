@@ -50,35 +50,32 @@ def update_ema(target_params, source_params, rate=0.99):
         targ.detach().mul_(rate).add_(src, alpha=1 - rate)
 
 
-def zero_module(module):
+def zero_module(module: eqx.Module):
     """
     Zero out the parameters of a module and return it.
     """
-    eqx.tree_at(lambda m: m.weight, module, jnp.zeros_like(module.weight))
-    eqx.tree_at(lambda m: m.bias, module, jnp.zeros_like(module.bias))
+    eqx.tree_at(lambda m: m.weight, module, jnp.zeros_like(module.weight))  #type:ignore
+    eqx.tree_at(lambda m: m.bias, module, jnp.zeros_like(module.bias))  #type:ignore
     return module
 
 
-def scale_module(module, scale):
-    """
-    Scale the parameters of a module and return it.
-    """
-    for p in module.parameters():
-        p.detach().mul_(scale)
-    return module
+# def scale_module(module, scale):
+    # """
+    # Scale the parameters of a module and return it.
+    # """
+    # for p in module.parameters():
+        # p.detach().mul_(scale)
+    # return module
 
 
-def mean_flat(tensor):
+def mean_flat(array: jnp.ndarray):
     """
     Take the mean over all non-batch dimensions.
     """
-    return tensor.mean(dim=list(range(1, len(tensor.shape))))
+    return array.mean(axis=list(range(1, len(array.shape))))
 
 
-    
-
-
-def timestep_embedding(timesteps, dim, max_period=10000):
+def timestep_embedding(timesteps: jnp.ndarray, dim, max_period=10000):
     """
     Create sinusoidal timestep embeddings.
 
@@ -90,9 +87,9 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     """
     half = dim // 2
     freqs = jnp.exp(
-        -math.log(max_period) * jnp.arange(0, half, dtype=jnp.float32) / half
+        -math.log(max_period) * jnp.arange(0, half, dtype=jnp.bfloat16) / half
     )  # .to(device=timesteps.device)
-    args = timesteps[:, None].float() * freqs[None]
+    args = timesteps[:, None].astype(jnp.bfloat16) * freqs[None]
     embedding = jnp.concat([jnp.cos(args), jnp.sin(args)], axis=-1)
     if dim % 2:
         embedding = jnp.concat([embedding, jnp.zeros_like(embedding[:, :1])], axis=-1)

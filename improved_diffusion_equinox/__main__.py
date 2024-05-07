@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from . import logger
 from .image_datasets import load_data
 from .resample import create_named_schedule_sampler
-from .script_util import create_model_and_diffusion
+from .script_util import create_model, create_gaussian_diffusion
 
 from .train import TrainLoop
 
@@ -22,7 +22,8 @@ def train_main(args):
     keys = jrd.split(key, 2)
 
     logger.log("creating model and diffusion...")
-    model, diffusion = create_model_and_diffusion(**args["architecture"], key=keys[0])
+    model = create_model(**args["unet"])
+    diffusion = create_gaussian_diffusion(**args["diffusion"])
     # model.to(dist_util.dev())
     schedule_sampler = create_named_schedule_sampler(args["schedule_sampler"], diffusion)
 

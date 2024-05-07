@@ -81,6 +81,7 @@ class SpacedDiffusion(GaussianDiffusion):
                 new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
                 last_alpha_cumprod = alpha_cumprod
                 self.timestep_map.append(i)
+        self.timestep_map = jnp.array(self.timestep_map)
         kwargs["betas"] = jnp.array(new_betas)
         super().__init__(**kwargs)
 

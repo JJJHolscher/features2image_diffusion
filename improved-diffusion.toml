@@ -8,7 +8,7 @@ schedule_sampler        = "uniform"
 lr                      = 1e-4
 weight_decay            = 0.0
 lr_anneal_steps         = 0
-batch_size              = 1
+batch_size              = 16
 microbatch              = -1        # -1 disables microbatches
 ema_rate                = "0.9999"  # comma-separated list of EMA values
 log_interval            = 10
@@ -16,31 +16,34 @@ save_interval           = 10000
 resume_checkpoint       = ""
 use_fp16                = false
 fp16_scale_growth       = 1e-3
+clip_denoised		= true
+use_ddim		= false
+num_samples		= 1e4
+model_path		= ""
 seed 			= 0
 
-# architecture
-[architecture]
+# Unet initialization arguments
+[unet]
 image_size              = 64
 num_channels            = 128
 num_res_blocks          = 2
+learn_sigma		= false
+class_cond              = false
+attention_resolutions   = "16,8"
 num_heads               = 4
 num_heads_upsample      = -1
-# num_head_channels     = -1
-attention_resolutions   = "16,8"
-# channel_mult          = ""
+use_scale_shift_norm    = true
 dropout                 = 0.0
-class_cond              = false
-# use_checkpoint        = false
-# resblock_updown         = false
-learn_sigma		= false
+seed			= 0
+
+# Diffusion initialization arguments
+[diffusion]
+steps			= 1000
+learn_sigma		= false    # this must be the same as unet.learn_sigma
 sigma_small		= false
-diffusion_steps		= 1000
 noise_schedule		= "linear"
-timestep_respacing	= ""
 use_kl			= false
 predict_xstart		= false
 rescale_timesteps	= true
 rescale_learned_sigmas	= true
-use_scale_shift_norm    = true
-# use_fp16                = false
-# use_new_attention_order = false
+timestep_respacing	= ""

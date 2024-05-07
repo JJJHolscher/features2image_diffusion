@@ -53,7 +53,7 @@ class TimestepEmbedSequential(TimestepBlock):
                 x = layer(x, emb)
             else:
                 x = layer(x)
-        return ,
+        return x
 
 
 class Upsample(eqx.Module):
@@ -93,7 +93,7 @@ class Upsample(eqx.Module):
             x = jnp.repeat(x, 2, axis=-2)
         if self.conv:
             x = self.conv(x)
-        return ,
+        return x
 
 
 class Downsample(eqx.Module):
@@ -123,7 +123,7 @@ class Downsample(eqx.Module):
 
     def __call__(self, x):
         assert x.shape[1] == self.channels
-        return self.op(x,
+        return self.op(x)
 
 
 class ResBlock(TimestepBlock):
@@ -302,7 +302,7 @@ class AttentionBlock(nn.StatefulLayer):
         h = self.attention(qkv)
         h = h.reshape(b, -1, h.shape[-1])
         h = self.proj_out(h)
-        return (x + h).reshape(b, c, *spatial,
+        return (x + h).reshape(b, c, *spatial)
 
 
 class UNetModel(eqx.Module):
@@ -351,7 +351,7 @@ class UNetModel(eqx.Module):
         out_channels,
         num_res_blocks,
         attention_resolutions,
-        key,
+        seed,
         dropout=0,
         channel_mult=(1, 2, 4, 8),
         conv_resample=True,
@@ -378,7 +378,9 @@ class UNetModel(eqx.Module):
         self.num_heads = num_heads
         self.num_heads_upsample = num_heads_upsample
 
-        key, k0, k1, k2, k3, k4, k5 = jrd.split(key, 7)
+        key = jrd.PRNGKey(seed)
+        key, k0, k1, k2, k3, k4, k5, k6 = jrd.split(key, 8)
+
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential([
             nn.Linear(model_channels, time_embed_dim, key=k0),
@@ -387,7 +389,7 @@ class UNetModel(eqx.Module):
         ])
 
         if self.num_classes is not None:
-            self.label_emb = nn.Embedding(num_classes, time_embed_dim)
+            self.label_emb = nn.Embedding(num_classes, time_embed_dim, key=k6)
         else:
             self.label_emb = None
 

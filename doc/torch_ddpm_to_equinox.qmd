@@ -1,0 +1,100 @@
+```{python}
+#| echo: false
+#| output: false
+%cd ..
+```
+
+# Loading torch weights into equinox
+
+To make the [openai diffusion model](https://github.com/openai/improved-diffusion) work in equinox, I've had to rewrite the code but I also a way to load the torch weights into my equinox python class.  
+That's what this code will be for.
+
+Let's get it's weights
+
+```{python}
+import torch as th
+
+WEIGHTS_PATH = "res/imagenet64_cond_270M_250K.pt"
+
+saved_weights = th.load(WEIGHTS_PATH, map_location=th.device("cpu"))
+```
+
+and filter out any stateful layers.
+
+```{python}
+import jax.dlpack as jdp
+
+def to_jax(tensor):
+    return jdp.from_dlpack(th.to_dlpack(tensor))
+
+# iterate over stateless weights
+weights = [
+    (name, to_jax(weight))
+    for name, weight in saved_weights.items()
+    if "num_batches" not in name and "running" not in name
+]
+
+# iterate over stateful layers
+running_mean = None
+bn_s = []
+for name, weight in saved_weights.items():
+    if "running_mean" in name:
+        bn_s.append(False)
+        assert running_mean is None
+        running_mean = to_jax(weight)
+    elif "running_var" in name:
+        assert running_mean is not None
+        bn_s.append((running_mean, to_jax(weight)))
+        running_mean = None
+
+del saved_weights
+
+# luckily there are no stateful layers!
+print(bn_s)
+```
+
+Now we create an equinox U-net with the correct arguments.
+
+```{python}
+import argtoml
+from improved_diffusion_equinox import script_util
+
+ARGUMENTS_PATH = "imagenet64_cond_270M_250K.toml"
+
+args = argtoml.parse_args(["improved-diffusion.toml", ARGUMENTS_PATH])
+
+model = script_util.create_model(**args["unet"])
+```
+
+All that is left is to supplant every weight from the unet model with the loaded torch weights.
+
+```{python}
+import jax.numpy as jnp
+import jax.tree_util as jtu
+
+leaves, tree_def = jtu.tree_flatten(model)
+
+weights_iterator = iter(weights)
+new_leaves = []
+num_weight_leaves = 0
+for leaf in leaves:
+    if isinstance(leaf, jnp.ndarray) and not (
+        leaf.size == 1 and isinstance(leaf.item(), bool)
+    ):
+        (weight_name, new_weights) = next(weights_iterator)
+        new_leaves.append(jnp.reshape(new_weights, leaf.shape))
+        num_weight_leaves += 1
+    else:
+        new_leaves.append(leaf)
+
+assert num_weight_leaves == len(weights)
+
+model = jtu.tree_unflatten(tree_def, new_leaves)
+```
+
+Finally we save the weights in the `.eqx` format.
+
+```{python}
+import jo3util.eqx as jo3eqx
+jo3eqx.save(WEIGHTS_PATH[:-2] + "eqx", model, args["unet"])
+```

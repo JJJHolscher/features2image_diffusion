@@ -71,8 +71,8 @@ class TrainLoop:
         self.resume_step = 0
         self.global_batch = self.batch_size  # * dist.get_world_size()
 
-        # self.model_params = list(self.model.parameters())
-        # self.master_params = self.model_params
+        self.model_params = list(self.model.parameters())
+        self.master_params = self.model_params
         self.lg_loss_scale = INITIAL_LOG_LOSS_SCALE
 
         self._load_and_sync_parameters()

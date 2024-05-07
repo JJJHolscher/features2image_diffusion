@@ -1,0 +1,79 @@
+```{python}
+#| echo: false
+#| output: false
+%cd ..
+```
+
+# Sampling imagenet images from the ddpm
+
+We've ported [openai's diffusion model](https://github.com/openai/improved-diffusion) to equinox.  
+Now we will sample images from it.
+
+Let's load it and the diffuser.
+
+```{python}
+import argtoml
+from jo3util.eqx import load as jo3load
+from improved_diffusion_equinox import script_util
+
+args = argtoml.parse_args(["improved-diffusion.toml", "imagenet64_cond_270M_250K.toml"])
+
+model = jo3load(args["model_path"], script_util.create_model)
+diffusion = script_util.create_gaussian_diffusion(**args["diffusion"])
+```
+
+```{python}
+import debugpy
+import jax.random as jrd
+
+debugpy.listen(5678)
+debugpy.wait_for_client()
+
+key = jrd.PRNGKey(args["seed"])
+key, k1, k2 = jrd.split(key, 3)
+
+model_kwargs = {"y": jrd.randint(
+    key=k1, minval=0, maxval=1000, shape=(args["batch_size"],)
+)}
+sample_fn = (
+    diffusion.p_sample_loop if not args["use_ddim"] else diffusion.ddim_sample_loop
+)
+sample = sample_fn(
+    model,
+    (args["batch_size"], 3, args["unet"]["image_size"], args["unet"]["image_size"]),
+    clip_denoised=args["clip_denoised"],
+    model_kwargs=model_kwargs,
+    key=k2
+)
+```
+sample = ((sample + 1) * 127.5).clamp(0, 255).to(jnp.uint8)
+sample = sample.permute(0, 2, 3, 1)
+sample = sample.contiguous()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
