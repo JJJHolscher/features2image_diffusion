@@ -1,17 +1,17 @@
 lr                      = 3e-4
 batch_size              = 128
-model_path		        = "./res/imagenet64_cond_270M_250K.eqx"
+model_path		= "./res/imagenet64_cond_270M_250K.eqx"
 
 [unet]
 image_size              = 64
 num_channels            = 192
 num_res_blocks          = 3
-learn_sigma		        = true
+learn_sigma		= true
 class_cond              = true
 
 [diffusion]
-steps		            = 4000
-learn_sigma		        = true
-noise_schedule		    = "cosine"
-rescale_timesteps	    = false
+steps		        = 4000
+learn_sigma	        = true
+noise_schedule	        = "cosine"
+rescale_timesteps       = false
 rescale_learned_sigmas	= false

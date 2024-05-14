@@ -61,6 +61,9 @@ def sample_main(args):
     key = jax.random.PRNGKey(args["seed"])
 
     logger.log("creating model and diffusion...")
+    model = create_model(**args["unet"])
+    diffusion = create_gaussian_diffusion(**args["diffusion"])
+
     model, diffusion = create_model_and_diffusion(**args)
     model.load_state_dict(
         dist_util.load_state_dict(args["model_path"], map_location="cpu")
@@ -123,7 +126,7 @@ if __name__ == "__main__":
     O = argtoml.parse_args(Path("improved-diffusion.toml"))
     jax.config.update("jax_numpy_dtype_promotion", "strict")
     jax.config.update("jax_disable_jit", True)
-    jax.config.update("jax_enable_x64", True)
+    # jax.config.update("jax_enable_x64", True)
     if "train" in O and O["train"]:
         train_main(O)
     if "sample" in O and O["sample"]:

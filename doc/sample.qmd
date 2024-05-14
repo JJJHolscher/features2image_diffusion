@@ -9,7 +9,27 @@
 We've ported [openai's diffusion model](https://github.com/openai/improved-diffusion) to equinox.  
 Now we will sample images from it.
 
-Let's load it and the diffuser.
+First we're making this notebook a friendly starting point to debug from.
+
+```{python}
+# Make sure to re-import the source code whenever a cell is run.
+# This way we don't need to keep restarting the notebook for every change.
+%load_ext autoreload
+%autoreload 2
+%aimport debugpy
+%aimport jax
+
+import debugpy
+import jax
+
+# debugpy.listen(5678)
+# Make variables visible to the debugger inside jitted fuctions.
+# jax.config.update("jax_disable_jit", True)
+# On my debugputer the gpu is not powerful enought.
+jax.config.update("jax_platform_name", "cpu")
+```
+
+Let's now load the model and the diffuser.
 
 ```{python}
 import argtoml
@@ -23,11 +43,9 @@ diffusion = script_util.create_gaussian_diffusion(**args["diffusion"])
 ```
 
 ```{python}
-import debugpy
 import jax.random as jrd
 
-debugpy.listen(5678)
-debugpy.wait_for_client()
+# debugpy.wait_for_client()
 
 key = jrd.PRNGKey(args["seed"])
 key, k1, k2 = jrd.split(key, 3)

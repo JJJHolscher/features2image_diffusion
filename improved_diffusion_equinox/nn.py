@@ -75,7 +75,7 @@ def mean_flat(array: jnp.ndarray):
     return array.mean(axis=list(range(1, len(array.shape))))
 
 
-def timestep_embedding(timesteps: jnp.ndarray, dim, max_period=10000):
+def timestep_embedding(timesteps: int, dim, max_period=10000):
     """
     Create sinusoidal timestep embeddings.
 
@@ -89,8 +89,10 @@ def timestep_embedding(timesteps: jnp.ndarray, dim, max_period=10000):
     freqs = jnp.exp(
         -math.log(max_period) * jnp.arange(0, half, dtype=jnp.bfloat16) / half
     )  # .to(device=timesteps.device)
-    args = timesteps[:, None].astype(jnp.bfloat16) * freqs[None]
+    args = timesteps * freqs
+    # args = timesteps[:, None].astype(jnp.bfloat16) * freqs[None]
     embedding = jnp.concat([jnp.cos(args), jnp.sin(args)], axis=-1)
     if dim % 2:
-        embedding = jnp.concat([embedding, jnp.zeros_like(embedding[:, :1])], axis=-1)
+        # embedding = jnp.concat([embedding, jnp.zeros_like(embedding[:, :1])], axis=-1)
+        embedding = jnp.concat([embedding, jnp.zeros_like(embedding[0])], axis=-1)
     return embedding

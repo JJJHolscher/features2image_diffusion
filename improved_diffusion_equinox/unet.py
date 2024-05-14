@@ -81,7 +81,7 @@ class Upsample(eqx.Module):
             self.conv = None
 
     def __call__(self, x):
-        assert x.shape[1] == self.channels
+        assert x.shape[0] == self.channels
         # if self.dims == 3:
             # x = F.interpolate(
                 # x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
@@ -122,7 +122,7 @@ class Downsample(eqx.Module):
             self.op = avg_pool_nd(stride)
 
     def __call__(self, x):
-        assert x.shape[1] == self.channels
+        assert x.shape[0] == self.channels
         return self.op(x)
 
 
@@ -172,11 +172,11 @@ class ResBlock(TimestepBlock):
         k0, k1, k2, k3 = jrd.split(key, 4)
         self.in_layers = nn.Sequential([
             nn.GroupNorm(32, channels),
-            jnn.silu,
+            nn.Lambda(jnn.silu),
             nn.Conv(dims, channels, self.out_channels, 3, padding=1, key=k0),
         ])
         self.emb_layers = nn.Sequential([
-            jnn.silu,
+            nn.Lambda(jnn.silu),
             nn.Linear(
                 emb_channels,
                 2 * self.out_channels if use_scale_shift_norm else self.out_channels,
@@ -185,7 +185,7 @@ class ResBlock(TimestepBlock):
         ])
         self.out_layers = nn.Sequential([
             nn.GroupNorm(32, self.out_channels),
-            jnn.silu,
+            nn.Lambda(jnn.silu),
             nn.Dropout(p=dropout),
             zero_module(
                 nn.Conv(dims, self.out_channels, self.out_channels, 3, padding=1, key=k2)
@@ -215,7 +215,7 @@ class ResBlock(TimestepBlock):
             emb_out = emb_out[..., None]
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
-            scale, shift = jnp.array_split(emb_out, 2, axis=1)
+            scale, shift = jnp.array_split(emb_out, 2, axis=0)
             h = out_norm(h) * (1 + scale) + shift
             h = out_rest(h)
         else:
@@ -237,7 +237,7 @@ class QKVAttention(eqx.Module):
         :return: an [N x C x T] tensor after attention.
         """
         ch = qkv.shape[1] // 3
-        q, k, v = jnp.split(qkv, ch, axis=1)
+        q, k, v = jnp.split(qkv, 3, axis=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
         weight = jnp.einsum(
             "bct,bcs->bts", q * scale, k * scale
@@ -294,15 +294,15 @@ class AttentionBlock(nn.StatefulLayer):
         self.proj_out = zero_module(nn.Conv(1, channels, channels, 1, key=k1))
 
     def __call__(self, x):
-        b, c, *spatial = x.shape
-        x = x.reshape(b, c, -1)
+        c, *spatial = x.shape
+        x = x.reshape(c, -1)
         qkv = self.norm(x)
         qkv = self.qkv(qkv)
-        qkv = qkv.reshape(b * self.num_heads, -1, qkv.shape[2])
+        qkv = qkv.reshape(self.num_heads, -1, qkv.shape[1])
         h = self.attention(qkv)
-        h = h.reshape(b, -1, h.shape[-1])
+        h = h.reshape(-1, h.shape[-1])
         h = self.proj_out(h)
-        return (x + h).reshape(b, c, *spatial)
+        return (x + h).reshape(c, *spatial)
 
 
 class UNetModel(eqx.Module):
@@ -384,7 +384,7 @@ class UNetModel(eqx.Module):
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential([
             nn.Linear(model_channels, time_embed_dim, key=k0),
-            jnn.silu,
+            nn.Lambda(jnn.silu),
             nn.Linear(time_embed_dim, time_embed_dim, key=k1),
         ])
 
@@ -486,7 +486,7 @@ class UNetModel(eqx.Module):
 
         self.out = nn.Sequential([
             nn.GroupNorm(32, ch),
-            jnn.silu,
+            nn.Lambda(jnn.silu),
             zero_module(nn.Conv(dims, model_channels, out_channels, 3, padding=1, key=key)),
         ])
 
@@ -531,7 +531,7 @@ class UNetModel(eqx.Module):
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
 
         if y is not None and self.label_emb is not None:
-            assert y.shape == (x.shape[0],)
+            # assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
 
         # h = x.type(self.inner_dtype)
@@ -541,7 +541,7 @@ class UNetModel(eqx.Module):
             hs.append(h)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
-            cat_in = jnp.concat([h, hs.pop()], axis=1)
+            cat_in = jnp.concat([h, hs.pop()], axis=0)
             h = module(cat_in, emb)
         h = h.astype(x.dtype)
         return self.out(h)

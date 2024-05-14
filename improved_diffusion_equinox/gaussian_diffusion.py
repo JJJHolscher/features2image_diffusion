@@ -260,13 +260,13 @@ class GaussianDiffusion:
         if model_kwargs is None:
             model_kwargs = {}
 
-        B, C = x.shape[:2]
-        assert t.shape == (B,)
+        C = x.shape[0]
+        # assert t.shape == (B,)
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
-            assert model_output.shape == (B, C * 2, *x.shape[2:])
-            model_output, model_var_values = jnp.split(model_output, C, axis=1)
+            assert model_output.shape == (C * 2, *x.shape[1:])
+            model_output, model_var_values = jnp.split(model_output, 2, axis=0)
             if self.model_var_type == ModelVarType.LEARNED:
                 model_log_variance = model_var_values
                 model_variance = jnp.exp(model_log_variance)
@@ -299,7 +299,7 @@ class GaussianDiffusion:
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                return x.clamp(-1, 1)
+                return jnp.clip(x, -1, 1)
             return x
 
         if self.model_mean_type == ModelMeanType.PREVIOUS_X:
@@ -385,10 +385,7 @@ class GaussianDiffusion:
             model_kwargs=model_kwargs,
         )
         noise = jax.random.normal(key, x.shape)
-        nonzero_mask = (
-            (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
-        )  # no noise when t == 0
-        sample = out["mean"] + nonzero_mask * jnp.exp(0.5 * out["log_variance"]) * noise
+        sample = out["mean"] + (t == 0 * jnp.exp(0.5 * out["log_variance"]) * noise)
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
     def p_sample_loop(
@@ -434,7 +431,7 @@ class GaussianDiffusion:
         ):
             final = sample
         assert final is not None
-        return final["sample"]
+        return final
 
     def p_sample_loop_progressive(
         self,
@@ -444,7 +441,7 @@ class GaussianDiffusion:
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
-        model_kwargs=None,
+        model_kwargs={},
         progress=False,
     ):
         """
@@ -471,21 +468,26 @@ class GaussianDiffusion:
 
             indices = tqdm(indices)
 
+        y = model_kwargs.pop("y")
         keys = jrd.split(key, len(indices))
-        for i, key in zip(indices, key):
+        for i, key in zip(indices, keys):
             t = jnp.array([i] * shape[0]) # , device=device)
             # with th.no_grad():
-            out = self.p_sample(
-                model,
-                img,
-                t,
-                clip_denoised=clip_denoised,
-                denoised_fn=denoised_fn,
-                model_kwargs=model_kwargs,
-                key=key
-            )
+            def p_sample(m, i, t, y):
+                model_kwargs["y"] = y
+                out = self.p_sample(
+                    m,
+                    i,
+                    t,
+                    clip_denoised=clip_denoised,
+                    denoised_fn=denoised_fn,
+                    model_kwargs=model_kwargs,
+                    key=key
+                )
+                return out["sample"] # {"sample": sample, "pred_xstart": out["pred_xstart"]}
+            out = jax.vmap(p_sample, (None, 0, 0, 0))(model, img, t, y)
             yield out
-            img = out["sample"]
+            img = out
 
     def ddim_sample(
         self,
@@ -690,7 +692,11 @@ class GaussianDiffusion:
 
         # At the first timestep return the decoder NLL,
         # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
-        output = jnp.where((t == 0), decoder_nll, kl)
+        if t == 0:
+            output = decoder_nll
+        else:
+            output = kl
+        # output = jnp.where((t == 0), decoder_nll, kl)
         return {"output": output, "pred_xstart": out["pred_xstart"]}
 
     def training_losses(self, model, x_start, t, key=None, model_kwargs=None, noise=None):
@@ -733,12 +739,12 @@ class GaussianDiffusion:
                 ModelVarType.LEARNED,
                 ModelVarType.LEARNED_RANGE,
             ]:
-                B, C = x_t.shape[:2]
-                assert model_output.shape == (B, C * 2, *x_t.shape[2:])
-                model_output, model_var_values = jnp.split(model_output, C, axis=1)
+                C = x_t.shape[0]
+                assert model_output.shape == (C * 2, *x_t.shape[1:])
+                model_output, model_var_values = jnp.split(model_output, 2, axis=0)
                 # Learn the variance using the variational bound, but don't let
                 # it affect our mean prediction.
-                frozen_out = jnp.concat([model_output, model_var_values], axis=1)
+                frozen_out = jnp.concat([model_output, model_var_values], axis=0)
                 terms["vb"] = self._vb_terms_bpd(
                     model=lambda *_, r=frozen_out: r,
                     x_start=x_start,
@@ -806,36 +812,36 @@ class GaussianDiffusion:
                  - mse: an [N x T] tensor of epsilon MSEs for each timestep.
         """
         # device = x_start.device
-        batch_size = x_start.shape[0]
+        # batch_size = x_start.shape[0]
 
         vb = []
         xstart_mse = []
         mse = []
         for t in list(range(self.num_timesteps))[::-1]:
-            t_batch = jnp.array([t] * batch_size)  # , device=device)
+            # t_batch = jnp.array([t] * batch_size)  # , device=device)
             noise = jax.random.normal(key, x_start.shape)  # th.randn_like(x_start)
-            x_t = self.q_sample(x_start=x_start, t=t_batch, noise=noise)
+            x_t = self.q_sample(x_start=x_start, t=t, noise=noise)
             # Calculate VLB term at the current timestep
             # with th.no_grad():
             out = self._vb_terms_bpd(
                 model,
                 x_start=x_start,
                 x_t=x_t,
-                t=t_batch,
+                t=t,
                 clip_denoised=clip_denoised,
                 model_kwargs=model_kwargs,
             )
             vb.append(out["output"])
             xstart_mse.append(mean_flat((out["pred_xstart"] - x_start) ** 2))
-            eps = self._predict_eps_from_xstart(x_t, t_batch, out["pred_xstart"])
+            eps = self._predict_eps_from_xstart(x_t, t, out["pred_xstart"])
             mse.append(mean_flat((eps - noise) ** 2))
 
-        vb = jnp.stack(vb, axis=1)
-        xstart_mse = jnp.stack(xstart_mse, axis=1)
-        mse = jnp.stack(mse, axis=1)
+        vb = jnp.stack(vb, axis=0)
+        xstart_mse = jnp.stack(xstart_mse, axis=0)
+        mse = jnp.stack(mse, axis=0)
 
         prior_bpd = self._prior_bpd(x_start)
-        total_bpd = vb.sum(axis=1) + prior_bpd
+        total_bpd = vb.sum(axis=0) + prior_bpd
         return {
             "total_bpd": total_bpd,
             "prior_bpd": prior_bpd,
@@ -859,4 +865,4 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
     res = arr[timesteps]
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
-    return res.expand(broadcast_shape)
+    return jnp.broadcast_to(res, broadcast_shape)
