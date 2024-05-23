@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import jax.numpy as jnp
+import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
 from jo3mnist.imagenet import ImageNet
@@ -32,11 +32,11 @@ def load_data(
     )
     if deterministic:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=True
+            dataset, batch_size=batch_size, shuffle=False, drop_last=True
         )
     else:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, num_workers=1, drop_last=True
+            dataset, batch_size=batch_size, shuffle=True, drop_last=True
         )
     while True:
         yield from loader
@@ -48,9 +48,9 @@ class ImageNetSet(Dataset):
         self.paths = [p for p in Path(features_path).glob("[0-9]*.npy")]
 
     def __getitem__(self, i):
-        features = jnp.load(self.paths[i], allow_pickle=False).flatten()
+        # features = np.load(self.paths[i], allow_pickle=False).flatten()
         image, label = self.imagenet[i]
-        return features, image, label
+        return image, label
 
     def __len__(self):
         return len(self.paths)

@@ -10,6 +10,7 @@ Docstrings have been added, as well as DDIM sampling and a new collection of bet
 import enum
 import math
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
@@ -235,7 +236,7 @@ class GaussianDiffusion:
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(
-        self, model, x, t, clip_denoised=True, denoised_fn=None, model_kwargs=None
+        self, model, x, t, y=None, clip_denoised=True, denoised_fn=None
     ):
         """
         Apply the model to get p(x_{t-1} | x_t), as well as a prediction of
@@ -257,12 +258,9 @@ class GaussianDiffusion:
                  - 'log_variance': the log of 'variance'.
                  - 'pred_xstart': the prediction for x_0.
         """
-        if model_kwargs is None:
-            model_kwargs = {}
-
         C = x.shape[0]
         # assert t.shape == (B,)
-        model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+        model_output = model(x, self._scale_timesteps(t), y)
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
             assert model_output.shape == (C * 2, *x.shape[1:])
@@ -278,7 +276,7 @@ class GaussianDiffusion:
                 # The model_var_values is [-1, 1] for [min_var, max_var].
                 frac = (model_var_values + 1) / 2
                 model_log_variance = frac * max_log + (1 - frac) * min_log
-                model_variance = jnp.exp(model_log_variance)
+                model_variance = jnp.exp(model_log_variance)  # breakpoint()
         else:
             model_variance, model_log_variance = {
                 # for fixedlarge, we set the initial (log-)variance like so
@@ -293,7 +291,7 @@ class GaussianDiffusion:
                 ),
             }[self.model_var_type]
             model_variance = _extract_into_tensor(model_variance, t, x.shape)
-            model_log_variance = _extract_into_tensor(model_log_variance, t, x.shape)
+            model_log_variance = _extract_into_tensor(model_log_variance, t, x.shape)  # breakpoint()
 
         def process_xstart(x):
             if denoised_fn is not None:
@@ -306,7 +304,7 @@ class GaussianDiffusion:
             pred_xstart = process_xstart(
                 self._predict_xstart_from_xprev(x_t=x, t=t, xprev=model_output)
             )
-            model_mean = model_output
+            model_mean = model_output  # breakpoint()
         elif self.model_mean_type in [ModelMeanType.START_X, ModelMeanType.EPSILON]:
             if self.model_mean_type == ModelMeanType.START_X:
                 pred_xstart = process_xstart(model_output)
@@ -314,14 +312,14 @@ class GaussianDiffusion:
                 pred_xstart = process_xstart(
                     self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output)
                 )
-            model_mean, _, _ = self.q_posterior_mean_variance(
+            model_mean, _, _ = self.q_posterior_mean_variance(  # breakpoint()
                 x_start=pred_xstart, x_t=x, t=t
             )
         else:
             raise NotImplementedError(self.model_mean_type)
 
         assert (
-            model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape
+            model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape  # breakpoint()
         )
         return {
             "mean": model_mean,
@@ -359,7 +357,7 @@ class GaussianDiffusion:
         return t
 
     def p_sample(
-        self, model, x, t, key, clip_denoised=True, denoised_fn=None, model_kwargs=None
+        self, model, x, t, y, key, clip_denoised=True, denoised_fn=None
     ):
         """
         Sample x_{t-1} from the model at the given timestep.
@@ -380,13 +378,14 @@ class GaussianDiffusion:
             model,
             x,
             t,
+            y,
             clip_denoised=clip_denoised,
-            denoised_fn=denoised_fn,
-            model_kwargs=model_kwargs,
+            denoised_fn=denoised_fn
         )
-        noise = jax.random.normal(key, x.shape)
-        sample = out["mean"] + (t == 0 * jnp.exp(0.5 * out["log_variance"]) * noise)
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
+        noise = jax.random.normal(key, x.shape) * 0
+        mask = (t != 0).astype(jnp.float32)
+        sample = out["mean"] + (mask * jnp.exp(0.5 * out["log_variance"]) * noise)
+        return {"sample": sample, "pred_xstart": out["pred_xstart"]}  # breakpoint()
 
     def p_sample_loop(
         self,
@@ -398,7 +397,7 @@ class GaussianDiffusion:
         denoised_fn=None,
         model_kwargs=None,
         # device=None,
-        progress=False,
+        progress=True,
     ):
         """
         Generate samples from the model.
@@ -429,7 +428,7 @@ class GaussianDiffusion:
             progress=progress,
             key=key,
         ):
-            final = sample
+            final = sample  # breakpoint()
         assert final is not None
         return final
 
@@ -494,10 +493,10 @@ class GaussianDiffusion:
         model,
         x,
         t,
+        y,
         key,
         clip_denoised=True,
         denoised_fn=None,
-        model_kwargs=None,
         eta=0.0,
     ):
         """
@@ -509,9 +508,9 @@ class GaussianDiffusion:
             model,
             x,
             t,
+            y,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
-            model_kwargs=model_kwargs,
         )
         # Usually our model outputs epsilon, but we re-derive it
         # in case we used x_start or x_prev prediction.
@@ -540,9 +539,9 @@ class GaussianDiffusion:
         model,
         x,
         t,
+        y,
         clip_denoised=True,
         denoised_fn=None,
-        model_kwargs=None,
         eta=0.0,
     ):
         """
@@ -553,9 +552,9 @@ class GaussianDiffusion:
             model,
             x,
             t,
+            y,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
-            model_kwargs=model_kwargs,
         )
         # Usually our model outputs epsilon, but we re-derive it
         # in case we used x_start or x_prev prediction.
@@ -661,7 +660,7 @@ class GaussianDiffusion:
             img = out["sample"]
 
     def _vb_terms_bpd(
-        self, model, x_start, x_t, t, clip_denoised=True, model_kwargs=None
+        self, model, x_start, x_t, t, y=None, clip_denoised=True
     ):
         """
         Get a term for the variational lower-bound.
@@ -677,7 +676,7 @@ class GaussianDiffusion:
             x_start=x_start, x_t=x_t, t=t
         )
         out = self.p_mean_variance(
-            model, x_t, t, clip_denoised=clip_denoised, model_kwargs=model_kwargs
+            model, x_t, t, y, clip_denoised=clip_denoised
         )
         kl = normal_kl(
             true_mean, true_log_variance_clipped, out["mean"], out["log_variance"]
@@ -692,14 +691,15 @@ class GaussianDiffusion:
 
         # At the first timestep return the decoder NLL,
         # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
-        if t == 0:
-            output = decoder_nll
-        else:
-            output = kl
+        last_t = (t == 0).astype(jnp.float32) 
+        not_last_t = (t != 0).astype(jnp.float32) 
+        output = last_t * decoder_nll + not_last_t * kl
         # output = jnp.where((t == 0), decoder_nll, kl)
         return {"output": output, "pred_xstart": out["pred_xstart"]}
 
-    def training_losses(self, model, x_start, t, key=None, model_kwargs=None, noise=None):
+    @eqx.filter_jit
+    @eqx.filter_value_and_grad(has_aux=True)
+    def training_losses(self, model, x_start, t, y, key):
         """
         Compute training losses for a single timestep.
 
@@ -712,68 +712,48 @@ class GaussianDiffusion:
         :return: a dict with the key "loss" containing a tensor of shape [N].
                  Some mean or variance settings may also have other keys.
         """
-        if model_kwargs is None:
-            model_kwargs = {}
-        if noise is None:
-            assert key is not None
-            noise = jrd.normal(key, x_start.shape)  # th.randn_like(x_start)
+        noise = jrd.normal(key, x_start.shape)  # th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise)
 
         terms = {}
 
-        if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:
-            terms["loss"] = self._vb_terms_bpd(
-                model=model,
+        model_output = model(x_t, self._scale_timesteps(t), y)
+
+        if self.model_var_type in [
+            ModelVarType.LEARNED,
+            ModelVarType.LEARNED_RANGE,
+        ]:
+            C = x_t.shape[0]
+            assert model_output.shape == (C * 2, *x_t.shape[1:])
+            model_output, model_var_values = jnp.split(model_output, 2, axis=0)
+            # Learn the variance using the variational bound, but don't let
+            # it affect our mean prediction.
+            frozen_out = jnp.concat([model_output, model_var_values], axis=0)
+            terms["vb"] = self._vb_terms_bpd(
+                model=lambda *_, r=frozen_out: r,
                 x_start=x_start,
                 x_t=x_t,
                 t=t,
                 clip_denoised=False,
-                model_kwargs=model_kwargs,
             )["output"]
-            if self.loss_type == LossType.RESCALED_KL:
-                terms["loss"] *= self.num_timesteps
-        elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            if self.loss_type == LossType.RESCALED_MSE:
+                # Divide by 1000 for equivalence with initial implementation.
+                # Without a factor of 1/1000, the VB term hurts the MSE term.
+                terms["vb"] *= self.num_timesteps / 1000.0
 
-            if self.model_var_type in [
-                ModelVarType.LEARNED,
-                ModelVarType.LEARNED_RANGE,
-            ]:
-                C = x_t.shape[0]
-                assert model_output.shape == (C * 2, *x_t.shape[1:])
-                model_output, model_var_values = jnp.split(model_output, 2, axis=0)
-                # Learn the variance using the variational bound, but don't let
-                # it affect our mean prediction.
-                frozen_out = jnp.concat([model_output, model_var_values], axis=0)
-                terms["vb"] = self._vb_terms_bpd(
-                    model=lambda *_, r=frozen_out: r,
-                    x_start=x_start,
-                    x_t=x_t,
-                    t=t,
-                    clip_denoised=False,
-                )["output"]
-                if self.loss_type == LossType.RESCALED_MSE:
-                    # Divide by 1000 for equivalence with initial implementation.
-                    # Without a factor of 1/1000, the VB term hurts the MSE term.
-                    terms["vb"] *= self.num_timesteps / 1000.0
+        target = {
+            ModelMeanType.PREVIOUS_X: self.q_posterior_mean_variance(
+                x_start=x_start, x_t=x_t, t=t
+            )[0],
+            ModelMeanType.START_X: x_start,
+            ModelMeanType.EPSILON: noise,
+        }[self.model_mean_type]
+        assert model_output.shape == target.shape == x_start.shape
+        terms["mse"] = mean_flat((target - model_output) ** 2)
+        loss = terms["mse"] + terms["vb"]
+        terms["loss"] = loss
 
-            target = {
-                ModelMeanType.PREVIOUS_X: self.q_posterior_mean_variance(
-                    x_start=x_start, x_t=x_t, t=t
-                )[0],
-                ModelMeanType.START_X: x_start,
-                ModelMeanType.EPSILON: noise,
-            }[self.model_mean_type]
-            assert model_output.shape == target.shape == x_start.shape
-            terms["mse"] = mean_flat((target - model_output) ** 2)
-            if "vb" in terms:
-                terms["loss"] = terms["mse"] + terms["vb"]
-            else:
-                terms["loss"] = terms["mse"]
-        else:
-            raise NotImplementedError(self.loss_type)
-
-        return terms
+        return loss, terms
 
     def _prior_bpd(self, x_start):
         """

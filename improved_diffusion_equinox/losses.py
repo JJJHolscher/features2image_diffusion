@@ -44,7 +44,7 @@ def approx_standard_normal_cdf(x):
     A fast approximation of the cumulative distribution function of the
     standard normal.
     """
-    return 0.5 * (1.0 + jnp.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * jnp.pow(x, 3))))
+    return 0.5 * (1.0 + jnp.tanh(jnp.sqrt(2.0 / jnp.pi) * (x + 0.044715 * jnp.pow(x, 3))))
 
 
 def discretized_gaussian_log_likelihood(x, *, means, log_scales):
@@ -65,13 +65,13 @@ def discretized_gaussian_log_likelihood(x, *, means, log_scales):
     cdf_plus = approx_standard_normal_cdf(plus_in)
     min_in = inv_stdv * (centered_x - 1.0 / 255.0)
     cdf_min = approx_standard_normal_cdf(min_in)
-    log_cdf_plus = jnp.log(cdf_plus.clamp(min=1e-12))
-    log_one_minus_cdf_min = jnp.log((1.0 - cdf_min).clamp(min=1e-12))
+    log_cdf_plus = jnp.log(jnp.clip(cdf_plus, 1e-12))
+    log_one_minus_cdf_min = jnp.log(jnp.clip(1.0 - cdf_min, 1e-12))
     cdf_delta = cdf_plus - cdf_min
     log_probs = jnp.where(
         x < -0.999,
         log_cdf_plus,
-        jnp.where(x > 0.999, log_one_minus_cdf_min, jnp.log(cdf_delta.clamp(min=1e-12))),
+        jnp.where(x > 0.999, log_one_minus_cdf_min, jnp.log(jnp.clip(cdf_delta, 1e-12))),
     )
     assert log_probs.shape == x.shape
     return log_probs

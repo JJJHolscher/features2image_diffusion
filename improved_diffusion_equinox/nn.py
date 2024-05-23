@@ -72,7 +72,7 @@ def mean_flat(array: jnp.ndarray):
     """
     Take the mean over all non-batch dimensions.
     """
-    return array.mean(axis=list(range(1, len(array.shape))))
+    return array.mean(axis=list(range(0, len(array.shape))))
 
 
 def timestep_embedding(timesteps: int, dim, max_period=10000):
@@ -87,10 +87,9 @@ def timestep_embedding(timesteps: int, dim, max_period=10000):
     """
     half = dim // 2
     freqs = jnp.exp(
-        -math.log(max_period) * jnp.arange(0, half, dtype=jnp.bfloat16) / half
-    )  # .to(device=timesteps.device)
-    args = timesteps * freqs
-    # args = timesteps[:, None].astype(jnp.bfloat16) * freqs[None]
+        -math.log(max_period) * jnp.arange(0, half, dtype=jnp.float32) / half
+    )
+    args = timesteps.astype(jnp.float32) * freqs
     embedding = jnp.concat([jnp.cos(args), jnp.sin(args)], axis=-1)
     if dim % 2:
         # embedding = jnp.concat([embedding, jnp.zeros_like(embedding[:, :1])], axis=-1)

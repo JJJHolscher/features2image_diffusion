@@ -527,7 +527,7 @@ class UNetModel(eqx.Module):
             self.num_classes is not None
         ), "must specify y if and only if the model is class-conditional"
 
-        hs = []
+        hs = []  # breakpoint()
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
 
         if y is not None and self.label_emb is not None:
@@ -535,15 +535,15 @@ class UNetModel(eqx.Module):
             emb = emb + self.label_emb(y)
 
         # h = x.type(self.inner_dtype)
-        h = x
+        h = x # breakpoint
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)
-        h = self.middle_block(h, emb)
+        h = self.middle_block(h, emb)  # breakpoint()
         for module in self.output_blocks:
             cat_in = jnp.concat([h, hs.pop()], axis=0)
             h = module(cat_in, emb)
-        h = h.astype(x.dtype)
+        h = h.astype(x.dtype)  # breakpoint()
         return self.out(h)
 
     def get_feature_vectors(self, x, timesteps, y=None):

@@ -1,9 +1,10 @@
+debug			= false
 
 # training
 train			= true
 sample			= true
-image_dir               = ""
-feature_dir		= ""
+image_dir               = "../dta/imagenet/train"
+feature_dir		= "../dta/sae/train"
 schedule_sampler        = "uniform"
 lr                      = 1e-4
 weight_decay            = 0.0

@@ -1,8 +1,7 @@
 lr                      = 3e-4
 batch_size              = 128
-model_path		= "../../mdl/imagenet64_cond_270M_250K.eqx"
+model_path		= "./res/imagenet64_cond_270M_250K.eqx"
 image_dir               = "../../dta/imagenet/train"
-feature_dir		= "../../dta/sae/train"
 
 [unet]
 image_size              = 64
