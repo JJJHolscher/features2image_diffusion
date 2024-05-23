@@ -1,0 +1,14 @@
+#/bin/sh
+
+if [ "$1" = "eai" ]; then
+    dirs="./ eai:jono/cdm/"
+fi
+if [ "$1" = "jono" ]; then
+    dirs="eai:jono/cdm/ ./"
+fi
+
+if [ -z "$2" ]; then
+    dry_run="--dry-run"
+fi
+
+rsync -rvaz $dry_run --exclude="/.*" --exclude=".git" --exclude="/xyz" --exclude="/web" --filter="dir-merge,- .gitignore" $dirs

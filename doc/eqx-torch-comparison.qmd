@@ -1,0 +1,9 @@
+
+At the start of the forward call in torch and equinox, I made x be filled with "0.5"
+And I need to make sure the labels are identical, I'm choosing label 0.
+
+One needs to be careful about setting x to 0.5, it's best done immediately after the vmap call.
+
+```{python}
+
+```
