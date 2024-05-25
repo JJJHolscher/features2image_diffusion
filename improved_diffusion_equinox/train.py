@@ -10,6 +10,8 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
+import jax.tree_util as jtu
+from jax.sharding import PositionalSharding
 from jo3util.eqx import save as jo3save
 from jo3util.eqx import load as jo3load
 import optax
@@ -78,13 +80,13 @@ class TrainLoop:
         self.resume_step = 0
         self.global_batch = self.batch_size  # * dist.get_world_size()
 
-        # self.model_params = list(self.model.parameters())
-        self.master_params = copy.deepcopy(model) # self.model_params
-        self.lg_loss_scale = INITIAL_LOG_LOSS_SCALE
-
         self._load_and_sync_parameters()
-        # if self.use_fp16:
-            # self._setup_fp16()
+        if self.use_fp16:
+            self.model = self.model.convert_to_fp16()
+
+        # self.model_params = list(self.model.parameters())
+        # self.master_params = copy.deepcopy(model) # self.model_params
+        self.lg_loss_scale = INITIAL_LOG_LOSS_SCALE
 
         # self.opt = AdamW(self.master_params, lr=self.lr, weight_decay=self.weight_decay)
         self.opt = optax.adamw(self.lr, weight_decay=self.weight_decay)
@@ -98,7 +100,7 @@ class TrainLoop:
             ]
         else:
             self.ema_params = [
-                copy.deepcopy(self.master_params) for _ in range(len(self.ema_rate))
+                copy.deepcopy(self.model) for _ in range(len(self.ema_rate))
             ]
 
         self.use_ddp = False
@@ -120,7 +122,7 @@ class TrainLoop:
         # dist_util.sync_params(self.model.parameters())
 
     def _load_ema_parameters(self, rate):
-        ema_params = copy.deepcopy(self.master_params)
+        ema_params = copy.deepcopy(self.model)
 
         main_checkpoint = find_resume_checkpoint() or self.resume_checkpoint
         ema_checkpoint = find_ema_checkpoint(main_checkpoint, self.resume_step, rate)
@@ -147,7 +149,10 @@ class TrainLoop:
             or self.step + self.resume_step < self.lr_anneal_steps
         ):
             batch, cond = next(self.data)
-            batch, cond = batch.numpy(), cond.numpy()
+            batch, cond = jnp.array(batch.numpy()), jnp.array(cond.numpy())
+            if self.use_fp16:
+                batch = batch.astype(jax.dtypes.bfloat16)
+
             key, subkey = jrd.split(key)
             self.run_step(batch, cond, subkey)
             if self.step % self.log_interval == 0:
@@ -163,45 +168,85 @@ class TrainLoop:
             self.save()
 
     def run_step(self, batch, cond, key):
-        self.forward_backward(batch, cond, key)
+        grads = self.forward_backward(batch, cond, key)
         # if self.use_fp16:
             # self.optimize_fp16()
         # else:
-        self.optimize_normal()
+
+        # average grads and apply updates
+        grads = TrainLoop.avg_pytree(grads)
+        updates, self.opt_state = self.opt.update(grads, self.opt_state, self.model)
+        params, static = eqx.partition(self.model, eqx.is_array)
+        params = optax.apply_updates(params, updates)
+        self.model = eqx.combine(params, static)
+
+        self.optimize_normal(grads)
         self.log_step()
 
+    # @eqx.filter_jit
+    # @eqx.filter_grad(has_aux=True)
+    # @staticmethod
+
+
+
     def forward_backward(self, batch, cond, key):
+        all_grads = []
+        # sharding = PositionalSharding(jax.devices()).reshape(8)
+        # model = jax.device_put(self.ddp_model, sharding.replicate())
         for i in range(0, batch.shape[0], self.microbatch):
             micro = batch[i : i + self.microbatch]  # .to(dist_util.dev())
             micro_cond = cond[i : i + self.microbatch]  # to(dist_util.dev())
-            key, subkey = jrd.split(key)
-            t, weights = self.schedule_sampler.sample(micro.shape[0], key=subkey) # , dist_util.dev())
+            key, k1, k2 = jrd.split(key, 3)
+            t, weights = self.schedule_sampler.sample(micro.shape[0], key=k1) # , dist_util.dev())
 
-            (loss, terms), grads = jax.vmap(
-                self.diffusion.training_losses, 
-                (None, 0, 0, 0, None))(
-                    self.ddp_model,
-                    micro,
-                    t,
+            # put on devices
+            # t = jax.device_put(t, sharding)
+            # weights = jax.device_put(weights, sharding)
+            # micro = jax.device_put(micro, sharding)
+            # micro_cond = jax.device_put(micro_cond, sharding)
+
+            params, static = eqx.partition(self.model, eqx.is_array)
+            # params, static = eqx.partition(self.ddp_model, eqx.is_array)
+
+            def single_step(params, timesteps, micro_batch, micro_cond, key):
+                model = eqx.combine(params, static)
+                loss, mse, vb = self.diffusion.training_losses(
+                    model,
+                    micro_batch,
+                    timesteps,
                     micro_cond,
-                    subkey
+                    key,
                 )
+                return loss, mse, vb
 
-            # if isinstance(self.schedule_sampler, LossSecondMomentResampler):
-                # self.schedule_sampler.update_with_local_losses(
-                    # t, losses["loss"]
-                # )
+            single_step_1 = jax.pmap(single_step, in_axes=(None, 0, 0, 0, None))
 
-            loss = (loss * weights).mean()
+            @eqx.filter_grad(has_aux=True)
+            def single_step_2(params, timesteps, weights, micro_batch, micro_cond, key):
+                loss, mse, vb = single_step_1(params, timesteps, micro_batch, micro_cond, key)
+                out = (loss * weights).mean()
+                return out, {"loss": loss, "mse": mse, "vb": vb}
+
+
+            grads, terms = single_step_2(
+                params,
+                t,
+                weights,
+                micro,
+                micro_cond,
+                k2
+            )
+
             log_loss_dict(
                 self.diffusion, t, {k: v * weights for k, v in terms.items()}
             )
-            if self.use_fp16:
-                loss_scale = 2 ** self.lg_loss_scale
-                loss *= loss_scale
+            all_grads.append(grads)
+            # if self.use_fp16:
+                # loss_scale = 2 ** self.lg_loss_scale
+                # loss *= loss_scale
 
-            updates, self.opt_state = self.opt.update(grads, self.opt_state, self.model)
-            self.model = optax.apply_updates(self.model, updates)
+            print("loss:", terms["loss"].mean())
+        return all_grads
 
     # def optimize_fp16(self):
         # if any(not jnp.isfinite(p.grad).all() for p in self.model_params):
@@ -219,16 +264,44 @@ class TrainLoop:
         # master_params_to_model_params(self.model_params, self.master_params)
         # self.lg_loss_scale += self.fp16_scale_growth
 
-    def optimize_normal(self):
-        self._log_grad_norm()
-        # self._anneal_lr()
-        for rate, params in zip(self.ema_rate, self.ema_params):
-            update_ema(params, self.master_params, rate=rate)
+    @staticmethod
+    def avg_pytree(pytrees):
+        # a list where each element is a list of leaves
+        all_leaves = [jtu.tree_flatten(tree)[0] for tree in pytrees]
 
-    def _log_grad_norm(self):
+        avg = []
+        for leaf in all_leaves[0]:
+            if eqx.is_array(leaf):
+                avg.append(jnp.zeros_like(leaf))
+            else:
+                avg.append(leaf)
+
+        num_leaves = len(avg)
+        for leaves in all_leaves:
+            for i, leaf in enumerate(leaves):
+                if eqx.is_array(leaf):
+                    avg[i] += leaf / num_leaves
+
+        # reconstruct the average leaves into a pytree
+        treedef = jtu.tree_structure(pytrees[0])
+        return jtu.tree_unflatten(treedef, avg)
+
+    def optimize_normal(self, grads):
+        self._log_grad_norm(grads)
+        # self._anneal_lr()
+        for i in range(len(self.ema_rate)):
+            params, static = eqx.partition(self.ema_params[i], eqx.is_array)
+            params = optax.incremental_update(params, grads, self.ema_rate[i])
+            self.ema_params[i] = eqx.combine(params, static)
+        # for rate, params in zip(self.ema_rate, self.ema_params):
+            # update_ema(params, self.model, rate=rate)
+
+    @staticmethod
+    def _log_grad_norm(grads):
         sqsum = 0.0
-        for p in self.master_params:
-            sqsum += (p.grad ** 2).sum().item()
+        for p in jtu.tree_leaves(grads)[0]:
+            if eqx.is_array(p):
+                sqsum += (p ** 2).sum().item()
         logger.logkv_mean("grad_norm", jnp.sqrt(sqsum))
 
     # def _anneal_lr(self):
@@ -255,7 +328,7 @@ class TrainLoop:
             bf.join(get_blob_logdir(), filename)
             jo3save(bf.join(get_blob_logdir(), filename), params, self.model_init)
 
-        save_checkpoint(0, self.master_params)
+        save_checkpoint(0, self.model)
         for rate, params in zip(self.ema_rate, self.ema_params):
             save_checkpoint(rate, params)
 

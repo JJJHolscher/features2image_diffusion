@@ -1,19 +1,22 @@
 lr                      = 3e-4
 batch_size              = 128
-model_path		= "../../mdl/imagenet64_cond_270M_250K.eqx"
-image_dir               = "../../dta/imagenet/train"
-feature_dir		= "../../dta/sae/train"
+microbatch              = 8        # -1 disables microbatches
+model_path		        = "../mdl/imagenet64_cond_270M_250K.eqx"
+image_dir               = "../dta/imagenet/train"
+feature_dir		        = "../dta/sae/train"
+use_fp16                = true # false
+log_dir                 = "../log"
 
 [unet]
 image_size              = 64
 num_channels            = 192
 num_res_blocks          = 3
-learn_sigma		= true
+learn_sigma		        = true
 class_cond              = true
 
 [diffusion]
-steps		        = 4000
-learn_sigma	        = true
+steps		            = 4000
+learn_sigma	            = true
 noise_schedule	        = "cosine"
 rescale_timesteps       = false
 rescale_learned_sigmas	= false

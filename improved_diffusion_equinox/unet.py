@@ -490,21 +490,23 @@ class UNetModel(eqx.Module):
             zero_module(nn.Conv(dims, model_channels, out_channels, 3, padding=1, key=key)),
         ])
 
-    # def convert_to_fp16(self):
-        # """
-        # Convert the torso of the model to float16.
-        # """
-        # self.input_blocks.apply(convert_module_to_f16)
-        # self.middle_block.apply(convert_module_to_f16)
-        # self.output_blocks.apply(convert_module_to_f16)
+    def convert_to_fp16(self):
+        """
+        Convert the torso of the model to float16.
+        """
+        return jtu.tree_map(
+            lambda m: m.astype(jax.dtypes.bfloat16) if eqx.is_array(m) else m,
+            self
+        )
 
-    # def convert_to_fp32(self):
-        # """
-        # Convert the torso of the model to float32.
-        # """
-        # self.input_blocks.apply(convert_module_to_f32)
-        # self.middle_block.apply(convert_module_to_f32)
-        # self.output_blocks.apply(convert_module_to_f32)
+    def convert_to_fp32(self):
+        """
+        Convert the torso of the model to float32.
+        """
+        return jtu.tree_map(
+            lambda m: m.astype(jnp.float32) if eqx.is_array(m) else m,
+            self
+        )
 
     @property
     def inner_dtype(self):
@@ -528,7 +530,7 @@ class UNetModel(eqx.Module):
         ), "must specify y if and only if the model is class-conditional"
 
         hs = []  # breakpoint()
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
+        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels, dtype=x.dtype))
 
         if y is not None and self.label_emb is not None:
             # assert y.shape == (x.shape[0],)

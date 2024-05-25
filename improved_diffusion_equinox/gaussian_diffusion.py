@@ -202,14 +202,14 @@ class GaussianDiffusion:
         """
         if noise is None:
             assert key is not None
-            noise = jax.random.normal(key, x_start.shape)
+            noise = jax.random.normal(key, x_start.shape, dtype=x_start.dtype)
         else:
             assert noise.shape == x_start.shape
         return (
             _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
             + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)
             * noise
-        )
+        ).astype(x_start.dtype)
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
         """
@@ -382,7 +382,7 @@ class GaussianDiffusion:
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn
         )
-        noise = jax.random.normal(key, x.shape) * 0
+        noise = jax.random.normal(key, x.shape)
         mask = (t != 0).astype(jnp.float32)
         sample = out["mean"] + (mask * jnp.exp(0.5 * out["log_variance"]) * noise)
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}  # breakpoint()
@@ -478,9 +478,9 @@ class GaussianDiffusion:
                     m,
                     i,
                     t,
+                    y,
                     clip_denoised=clip_denoised,
                     denoised_fn=denoised_fn,
-                    model_kwargs=model_kwargs,
                     key=key
                 )
                 return out["sample"] # {"sample": sample, "pred_xstart": out["pred_xstart"]}
@@ -697,8 +697,6 @@ class GaussianDiffusion:
         # output = jnp.where((t == 0), decoder_nll, kl)
         return {"output": output, "pred_xstart": out["pred_xstart"]}
 
-    @eqx.filter_jit
-    @eqx.filter_value_and_grad(has_aux=True)
     def training_losses(self, model, x_start, t, y, key):
         """
         Compute training losses for a single timestep.
@@ -712,48 +710,31 @@ class GaussianDiffusion:
         :return: a dict with the key "loss" containing a tensor of shape [N].
                  Some mean or variance settings may also have other keys.
         """
-        noise = jrd.normal(key, x_start.shape)  # th.randn_like(x_start)
+        noise = jrd.normal(key, x_start.shape, dtype=x_start.dtype)  # th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise)
-
-        terms = {}
 
         model_output = model(x_t, self._scale_timesteps(t), y)
 
-        if self.model_var_type in [
-            ModelVarType.LEARNED,
-            ModelVarType.LEARNED_RANGE,
-        ]:
-            C = x_t.shape[0]
-            assert model_output.shape == (C * 2, *x_t.shape[1:])
-            model_output, model_var_values = jnp.split(model_output, 2, axis=0)
-            # Learn the variance using the variational bound, but don't let
-            # it affect our mean prediction.
-            frozen_out = jnp.concat([model_output, model_var_values], axis=0)
-            terms["vb"] = self._vb_terms_bpd(
-                model=lambda *_, r=frozen_out: r,
-                x_start=x_start,
-                x_t=x_t,
-                t=t,
-                clip_denoised=False,
-            )["output"]
-            if self.loss_type == LossType.RESCALED_MSE:
-                # Divide by 1000 for equivalence with initial implementation.
-                # Without a factor of 1/1000, the VB term hurts the MSE term.
-                terms["vb"] *= self.num_timesteps / 1000.0
+        C = x_t.shape[0]
+        assert model_output.shape == (C * 2, *x_t.shape[1:])
+        model_output, model_var_values = jnp.split(model_output, 2, axis=0)
+        # Learn the variance using the variational bound, but don't let
+        # it affect our mean prediction.
+        frozen_out = jnp.concat([model_output, model_var_values], axis=0)
+        vb = self._vb_terms_bpd(
+            model=lambda *_, r=frozen_out: r,
+            x_start=x_start,
+            x_t=x_t,
+            t=t,
+            clip_denoised=False,
+        )["output"]
 
-        target = {
-            ModelMeanType.PREVIOUS_X: self.q_posterior_mean_variance(
-                x_start=x_start, x_t=x_t, t=t
-            )[0],
-            ModelMeanType.START_X: x_start,
-            ModelMeanType.EPSILON: noise,
-        }[self.model_mean_type]
+        target = noise
         assert model_output.shape == target.shape == x_start.shape
-        terms["mse"] = mean_flat((target - model_output) ** 2)
-        loss = terms["mse"] + terms["vb"]
-        terms["loss"] = loss
+        mse = mean_flat((target - model_output) ** 2)
+        loss = mse + vb
 
-        return loss, terms
+        return loss, mse, vb
 
     def _prior_bpd(self, x_start):
         """
