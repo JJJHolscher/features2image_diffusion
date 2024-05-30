@@ -152,6 +152,7 @@ class TrainLoop:
             batch, cond = jnp.array(batch.numpy()), jnp.array(cond.numpy())
             if self.use_fp16:
                 batch = batch.astype(jax.dtypes.bfloat16)
+                cond = cond.astype(jax.dtypes.bfloat16)
 
             key, subkey = jrd.split(key)
             self.run_step(batch, cond, subkey)
@@ -174,6 +175,7 @@ class TrainLoop:
         # else:
 
         # average grads and apply updates
+        print("updating params")
         grads = TrainLoop.avg_pytree(grads)
         updates, self.opt_state = self.opt.update(grads, self.opt_state, self.model)
         params, static = eqx.partition(self.model, eqx.is_array)
@@ -320,12 +322,11 @@ class TrainLoop:
 
     def save(self):
         def save_checkpoint(rate, params):
-            logger.log(f"saving model {rate}...")
             if not rate:
                 filename = f"model{(self.step+self.resume_step):06d}.eqx"
             else:
                 filename = f"ema_{rate}_{(self.step+self.resume_step):06d}.eqx"
-            bf.join(get_blob_logdir(), filename)
+            logger.log(f"saving model {bf.join(get_blob_logdir(), filename)}...")
             jo3save(bf.join(get_blob_logdir(), filename), params, self.model_init)
 
         save_checkpoint(0, self.model)

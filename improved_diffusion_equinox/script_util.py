@@ -3,7 +3,7 @@ import inspect
 
 from . import gaussian_diffusion as gd
 from .respace import SpacedDiffusion, space_timesteps
-from .unet import UNetModel
+from .unet import UNetModel, UNetModelNew
 
 NUM_CLASSES = 1000
 
@@ -95,6 +95,7 @@ def create_model(
     use_scale_shift_norm,
     dropout,
     seed,
+    fp16=True
 ):
     if image_size == 256:
         channel_mult = (1, 1, 2, 2, 4, 4)
@@ -109,7 +110,7 @@ def create_model(
     for res in attention_resolutions.split(","):
         attention_ds.append(image_size // int(res))
 
-    return UNetModel(
+    model = UNetModelNew(
         in_channels=3,
         model_channels=num_channels,
         out_channels=(3 if not learn_sigma else 6),
@@ -117,12 +118,15 @@ def create_model(
         attention_resolutions=tuple(attention_ds),
         dropout=dropout,
         channel_mult=channel_mult,
-        num_classes=(NUM_CLASSES if class_cond else None),
+        num_classes=class_cond,
         num_heads=num_heads,
         num_heads_upsample=num_heads_upsample,
         use_scale_shift_norm=use_scale_shift_norm,
         seed=seed,
     )
+    if fp16:
+        model = model.convert_to_fp16()
+    return model
 
 
 def create_gaussian_diffusion(

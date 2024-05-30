@@ -37,7 +37,8 @@ def train_main(args):
     )
 
     logger.log("training...")
-    TrainLoop(
+
+    loop = TrainLoop(
         model=model,
         diffusion=diffusion,
         data=data,
@@ -54,7 +55,9 @@ def train_main(args):
         weight_decay=args["weight_decay"],
         lr_anneal_steps=args["lr_anneal_steps"],
         model_init=args["unet"],
-    ).run_loop(key=keys[1])
+    )
+
+    loop.run_loop(key=keys[1])
 
 
 if __name__ == "__main__":

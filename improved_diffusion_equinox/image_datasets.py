@@ -48,9 +48,9 @@ class ImageNetSet(Dataset):
         self.paths = [p for p in Path(features_path).glob("[0-9]*.npy")]
 
     def __getitem__(self, i):
-        # features = np.load(self.paths[i], allow_pickle=False).flatten()
-        image, label = self.imagenet[i]
-        return image, label
+        features = np.load(self.paths[i], allow_pickle=False).flatten()
+        image, _ = self.imagenet[i]
+        return image, features
 
     def __len__(self):
         return len(self.paths)
