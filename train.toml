@@ -2,18 +2,20 @@ device = "cuda:0"
 debug = false
 
 [[train]]
-# mnist_dir = "./xyz/res/mnist"
+mnist_dir = "./xyz/res/mnist"
 # tiny_imagenet_dir = "../sparse_autoencoder/res/tiny-imagenet-200"
-imagenet_dir = "../sparse_autoencoder/res/imagenet"
+# imagenet_dir = "../sparse_autoencoder/res/imagenet"
 
 # mnist
-# feature_dir = "../sparse_autoencoder/run/171d21f725b8721bc98f2d334b103d6b0e83570a958c461866fd12c6280a670f"
+feature_dir = "../sparse_autoencoder/run/171d21f725b8721bc98f2d334b103d6b0e83570a958c461866fd12c6280a670f"
 # tiny imagenet
 # feature_dir = "../sparse_autoencoder/run/2cc590d4"
 # imagenet
-feature_dir = "../sparse_autoencoder/run/1ae3fe65"
+# feature_dir = "../sparse_autoencoder/run/1ae3fe65"
 
-image_size = 64
+checkpoint = "./xyz/run/f045b447eeb482f014e92f1383cc3532aea8286365c48e1facaf40c5ea6bc684/model/epoch-19.pth"
+
+image_size = 28 # 64
 
 epochs = 40
 batch_size = 64

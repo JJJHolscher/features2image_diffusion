@@ -1,8 +1,9 @@
 lr                      = 3e-4
 batch_size              = 128 # 128
 microbatch              = 8        # -1 disables microbatches
-model_path              = "../mdl/imagenet_feature_cond.eqx"
-resume_checkpoint       = "../mdl/imagenet_feature_cond.eqx"
+# model_path              = "../mdl/imagenet_feature_cond.eqx"
+# resume_checkpoint       = "../log/openai-2024-05-30-16-25-16-436180/model000065.eqx"
+resume_checkpoint       = "../log/openai-2024-06-01-15-19-17-789308/model000065.eqx"
 image_dir               = "../dta/imagenet/train"
 feature_dir             = "../dta/sae/train"
 use_fp16                = true # false

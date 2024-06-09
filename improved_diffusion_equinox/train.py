@@ -132,7 +132,6 @@ class TrainLoop:
 
         return ema_params
 
-
     def _load_optimizer_state(self):
         main_checkpoint = find_resume_checkpoint() or self.resume_checkpoint
         opt_checkpoint = bf.join(
@@ -141,7 +140,6 @@ class TrainLoop:
         if bf.exists(opt_checkpoint):
             logger.log(f"loading optimizer state from checkpoint: {opt_checkpoint}")
             self.opt_state = eqx.tree_deserialise_leaves(opt_checkpoint, self.opt_state)
-
 
     def run_loop(self, key):
         while (
@@ -189,8 +187,6 @@ class TrainLoop:
     # @eqx.filter_grad(has_aux=True)
     # @staticmethod
 
-
-
     def forward_backward(self, batch, cond, key):
         all_grads = []
         # sharding = PositionalSharding(jax.devices()).reshape(8)
@@ -228,7 +224,6 @@ class TrainLoop:
                 loss, mse, vb = single_step_1(params, timesteps, micro_batch, micro_cond, key)
                 out = (loss * weights).mean()
                 return out, {"loss": loss, "mse": mse, "vb": vb}
-
 
             grads, terms = single_step_2(
                 params,

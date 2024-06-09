@@ -2,6 +2,7 @@
 import jax
 
 # debugpy.listen(5678)
+# debugpy.wait_for_client()
 # Make variables visible to the debugger inside jitted fuctions.
 # jax.config.update("jax_disable_jit", True)
 # On my debugputer the gpu is not powerful enought.
@@ -11,12 +12,19 @@ print("starting")
 import argtoml
 from jo3util.eqx import load as jo3load
 from improved_diffusion_equinox import script_util
+from improved_diffusion_equinox.image_datasets import load_data
 from pathlib import Path
 
-args = argtoml.parse_args(["improved-diffusion.toml", "imagenet64_cond_270M_250K.toml"], grandparent=False)
+args = argtoml.parse_args(["improved-diffusion.toml", "imagenet64_cond_270M_250K.toml", "sample.toml"], grandparent=False)
+if args["debug"]:
+    import debugpy
+    debugpy.listen(5678)
+    print("debugpy connecting ...")
+    debugpy.wait_for_client()
+    print("connected")
 # args["diffusion"]["steps"] = 2
 
-model = jo3load(args["model_path"], script_util.create_model)
+model = jo3load(args["model_path"], script_util.create_model).convert_to_fp16()
 diffusion = script_util.create_gaussian_diffusion(**args["diffusion"])
 
 import jax.random as jrd
@@ -26,19 +34,20 @@ key = jrd.PRNGKey(args["seed"])
 key, k1, k2 = jrd.split(key, 3)
 
 
-import pickle
-with open("./sample.pickle", 'wb') as outp:  # Overwrites any existing file.
-    pickle.dump(key, outp, pickle.HIGHEST_PROTOCOL)
-
-
-
-batch_size = 16 # 16 # args["batch_size"] # change this to 1 for debugging
-model_kwargs = {"y": jrd.randint(
-    key=k1,
-    minval=0,
-    maxval=1000, # 1000, change this to 0 for debugging
-    shape=(batch_size,)
-)}
+data = load_data(
+    feature_dir=args["feature_dir"],
+    image_dir=args["image_dir"],
+    batch_size=args["batch_size"],
+    image_size=args["unet"]["image_size"],
+)
+_, features = next(data)
+model_kwargs = {"y": jnp.array(features, dtype=jax.dtypes.bfloat16)}
+# model_kwargs = {"y": jrd.randint(
+    # key=k1,
+    # minval=0,
+    # maxval=1000, # 1000, change this to 0 for debugging
+    # shape=(batch_size,)
+# )}
 sample_fn = (
     diffusion.p_sample_loop if not args["use_ddim"] else diffusion.ddim_sample_loop
 )
@@ -50,10 +59,10 @@ sample_fn = (
 
 sample = sample_fn(
     model,
-    (batch_size, 3, args["unet"]["image_size"], args["unet"]["image_size"]),
+    (args["batch_size"], 3, args["unet"]["image_size"], args["unet"]["image_size"]),
     clip_denoised=args["clip_denoised"],
     model_kwargs=model_kwargs,
-    noise=jnp.zeros((batch_size, 3, 64, 64)) + 0.5,
+    # noise=jnp.zeros((args["batch_size"], 3, 64, 64)) + 0.5,
     key=k2
 )
 print(sample)

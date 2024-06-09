@@ -134,7 +134,7 @@ class GaussianDiffusion:
         self.rescale_timesteps = rescale_timesteps
 
         # Use float64 for accuracy.
-        betas = jnp.array(betas, dtype=jnp.float64)
+        # betas = jnp.array(betas, dtype=jnp.float64)
         self.betas = betas
         assert len(betas.shape) == 1, "betas must be 1-D"
         assert (betas > 0).all() and (betas <= 1).all()
@@ -382,8 +382,8 @@ class GaussianDiffusion:
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn
         )
-        noise = jax.random.normal(key, x.shape)
-        mask = (t != 0).astype(jnp.float32)
+        noise = jax.random.normal(key, x.shape, dtype=x.dtype)
+        mask = (t != 0).astype(x.dtype)
         sample = out["mean"] + (mask * jnp.exp(0.5 * out["log_variance"]) * noise)
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}  # breakpoint()
 
@@ -458,7 +458,7 @@ class GaussianDiffusion:
             img = noise
         else:
             key, subkey = jrd.split(key)
-            img = jrd.normal(subkey, shape)  # th.randn(*shape, device=device)
+            img = jrd.normal(subkey, shape, dtype=model.time_embed[0].weight.dtype)  # th.randn(*shape, device=device)
         indices = list(range(self.num_timesteps))[::-1]
 
         if progress:
@@ -483,7 +483,7 @@ class GaussianDiffusion:
                     denoised_fn=denoised_fn,
                     key=key
                 )
-                return out["sample"] # {"sample": sample, "pred_xstart": out["pred_xstart"]}
+                return out["sample"].astype(i.dtype) # {"sample": sample, "pred_xstart": out["pred_xstart"]}
             out = jax.vmap(p_sample, (None, 0, 0, 0))(model, img, t, y)
             yield out
             img = out

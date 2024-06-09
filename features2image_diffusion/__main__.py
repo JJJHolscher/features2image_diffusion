@@ -184,6 +184,7 @@ def train(
     n_example: int = 5,  # Amount of test set images to use
     n_sample: int = 4,  # Amount of generations per test set image
     device: str = "cpu",
+    checkpoint: Optional[str] = None
 ):
     """Create and train a DDPM on MNIST conditioned on features from a CNN.
 
@@ -238,7 +239,9 @@ def train(
     ddpm_loaded = False
 
     # optionally load a model
-    # ddpm.load_state_dict(torch.load("./data/diffusion_outputs/ddpm_unet01_mnist_9.pth"))
+    if checkpoint is not None:
+        print("loading", checkpoint)
+        ddpm.load_state_dict(torch.load(checkpoint))
 
     optim = torch.optim.Adam(ddpm.parameters(), lr=lr)
 
@@ -304,12 +307,11 @@ if __name__ == "__main__":
 
     for RUN in O["train"]:
         RUN_DIR = jo3run_dir(RUN, "./run")
+        print(RUN_DIR, O, sep="/n")
         if not RUN_DIR.exists():
             RUN_DIR.mkdir(parents=True)
-            with open(RUN_DIR / "config.toml", "wb") as f:
-                tomli_w.dump(O, f)
-            with open(RUN_DIR / "hyparam.toml", "wb") as f:
-                tomli_w.dump(RUN, f)
+            O.dump(RUN_DIR / "config.toml")
+            RUN.dump(RUN_DIR / "hyparam.toml")
 
         if "mnist_dir" in RUN and RUN["mnist_dir"]:
             train_loader, test_loader = load_mnist_with_features(
@@ -340,6 +342,7 @@ if __name__ == "__main__":
             n_epoch=RUN["epochs"],
             hidden_size=RUN["hidden_size"],
             drop_prob=RUN["drop_prob"],
+            checkpoint=RUN["checkpoint"] if "checkpoint" in RUN else None
         )
 
     if "mnist_dir" in O and O["mnist_dir"]:

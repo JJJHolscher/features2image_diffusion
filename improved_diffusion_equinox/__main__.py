@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # jax.config.update("jax_numpy_dtype_promotion", "strict")
     # jax.config.update("jax_enable_x64", True)
     if O["debug"]:
-        # jax.config.update("jax_disable_jit", True)
+        jax.config.update("jax_disable_jit", True)
         import debugpy
         debugpy.listen(5678)
         print("debugpy is waiting for a client...")
