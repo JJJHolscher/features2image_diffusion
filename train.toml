@@ -13,15 +13,15 @@ feature_dir = "../sparse_autoencoder/run/171d21f725b8721bc98f2d334b103d6b0e83570
 # imagenet
 # feature_dir = "../sparse_autoencoder/run/1ae3fe65"
 
-checkpoint = "./xyz/run/f045b447eeb482f014e92f1383cc3532aea8286365c48e1facaf40c5ea6bc684/model/epoch-19.pth"
+checkpoint = "./xyz/run/428b8698/model/epoch-35.pth"
 
 image_size = 28 # 64
 
 epochs = 40
-batch_size = 64
+batch_size = 128
 diffusion_steps = 400
 hidden_size = 128
-lr = 1e-4
+lr = 1e-5
 
 # Consider leaving the drop_prob at 0 or at 1 / feature_size.
 # I think the code assumes that features that are all zero are unconditional,
