@@ -296,7 +296,7 @@ class DDPM(nn.Module):
             guide_w: how much the context influences the generations
         """
 
-        batch_size = n_sample * len(context)
+        batch_size = n_sample # * len(context)
         # sample initial noise x_T ~ N(0, 1)
         x_i = torch.randn(batch_size, *size).to(device)
         # context for us just cycles throught the mnist labels
