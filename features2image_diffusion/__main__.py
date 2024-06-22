@@ -60,7 +60,7 @@ def evaluate(
         gif: whether to create a gif showing the image generation process
     """
     n_example = len(f)
-    x_gen, x_gen_store = ddpm.sample(f, n_sample, data_shape, device)
+    x_gen, x_gen_store = ddpm.sample(f, n_sample, data_shape, device, verbose=False)
 
     fig, axs = plt.subplots(n_sample + 1, n_example, facecolor="gray")
     fig.tight_layout()
@@ -184,7 +184,8 @@ def train(
     n_example: int = 5,  # Amount of test set images to use
     n_sample: int = 4,  # Amount of generations per test set image
     device: str = "cpu",
-    checkpoint: Optional[str] = None
+    checkpoint: Optional[str] = None,
+    **_,
 ):
     """Create and train a DDPM on MNIST conditioned on features from a CNN.
 
@@ -272,7 +273,6 @@ def train(
             torch.save(ddpm.state_dict(), model_path)
             ddpm_loaded = True
 
-        continue
         # for eval, save an image of currently generated samples (top rows)
         # followed by real images (bottom rows)
         ddpm.eval()
@@ -295,6 +295,8 @@ def train(
                 result_dir / f"gif_ep{ep}.gif" if not ep % 5 else None,
                 device=device,
             )
+
+    return ddpm
 
 
 if __name__ == "__main__":
