@@ -23,7 +23,6 @@ import torch
 import torchvision
 from jaxtyping import Float
 from jo3mnist.vis import to_img
-from jo3util.root import run_dir as jo3run_dir
 from matplotlib.animation import FuncAnimation, PillowWriter
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
@@ -44,6 +43,7 @@ def evaluate(
     img_path: Optional[Path],
     gif_path: Optional[Path] = None,
     device: str = "cpu",
+    recon_fn = None,
 ):
     """Compare conditioned ddpm generations with images from the data set.
 
@@ -67,6 +67,8 @@ def evaluate(
     for c in range(n_example):
         for r in range(n_sample):
             i = r * n_example + c
+            if recon_fn is not None:
+                axs[r, c].title.set_text(str(recon_fn(x_gen[i], x[c])))
             axs[r, c].imshow(to_img(x_gen[i].to("cpu")))
             axs[r, c].set_axis_off()
 
@@ -77,7 +79,7 @@ def evaluate(
     print("saved image at", img_path)
 
     if not gif_path:
-        return
+        return x_gen
     # gif of images evolving over time, based on x_gen_store
     fig, axs = plt.subplots(
         nrows=n_sample,
@@ -88,17 +90,13 @@ def evaluate(
     )
 
     def animate_diff(i, x_gen_store):
-        print(f"gif animating frame {i} of", x_gen_store.shape[0], end="\r")
+        # print(f"gif animating frame {i} of", x_gen_store.shape[0], end="\r")
         plots = []
         for row in range(int(n_sample)):
             for col in range(n_example):
                 axs[row, col].clear()
                 axs[row, col].set_xticks([])
                 axs[row, col].set_yticks([])
-                # plots.append(axs[row, col].imshow(
-                #     x_gen_store[i,(row*n_classes)+col,0],
-                #     cmap='gray')
-                # )
                 plots.append(
                     axs[row, col].imshow(
                         -x_gen_store[i, (row * n_example) + col, 0],
@@ -119,7 +117,8 @@ def evaluate(
         frames=x_gen_store.shape[0],
     )
     ani.save(gif_path, dpi=100, writer=PillowWriter(fps=5))
-    print("saved image at", gif_path)
+    print("saved gif at", gif_path)
+    return x_gen
 
 
 def train_epoch(
@@ -173,7 +172,6 @@ def train_epoch(
 
 
 def train(
-    run_dir: Path,
     train_loader: DataLoader,
     test_loader: DataLoader,
     n_epoch: int = 20,
@@ -220,7 +218,7 @@ def train(
         n_sample: the number of generations per example test image the DDPM
             creates during evaluation.
     """
-    test_loader = iter(test_loader)
+    run_dir = train_loader.dataset.paths[0].parent.parent.parent
     features, images, _ = next(iter(train_loader))
     img_shape = tuple(images.shape[1:])
 
@@ -248,7 +246,7 @@ def train(
 
     model_dir = run_dir / "model"
     result_dir = run_dir / "result"
-    model_dir.mkdir(exist_ok=True)
+    model_dir.mkdir(parents=True, exist_ok=True)
     result_dir.mkdir(exist_ok=True)
 
     for ep in range(n_epoch):
@@ -284,7 +282,7 @@ def train(
                 ddpm.load_state_dict(torch.load(model_path))
                 ddpm_loaded = True
 
-            f, x, _ = next(test_loader)
+            f, x, _ = next(iter(test_loader))
             evaluate(
                 ddpm,
                 f[:n_example],
@@ -308,8 +306,8 @@ if __name__ == "__main__":
         debugpy.listen(5678)
 
     for RUN in O["train"]:
-        RUN_DIR = jo3run_dir(RUN, "./run")
-        print(RUN_DIR, O, sep="/n")
+        RUN_DIR = Path("./run") / RUN.hash(prefix="./run")
+        print(RUN_DIR, O, sep="\n")
         if not RUN_DIR.exists():
             RUN_DIR.mkdir(parents=True)
             O.dump(RUN_DIR / "config.toml")
@@ -370,7 +368,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         for RUN in O["eval"]:
-            RUN_DIR = jo3run_dir(RUN, "./run")
+            RUN_DIR = RUN.hash(prefix="./run")
             RUN_DIR.mkdir(parents=True)
             with open(RUN_DIR / "config.toml", "wb") as f:
                 tomli_w.dump(O, f)

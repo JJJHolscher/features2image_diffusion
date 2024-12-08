@@ -347,7 +347,7 @@ class DDPM(nn.Module):
 
 
 def load_ddpm(
-    path: Path,
+    file,
     n_classes: int,
     n_channels: int,
     img_len: int,
@@ -369,7 +369,7 @@ def load_ddpm(
     )
     ddpm.to(device)
     ddpm.load_state_dict(
-        torch.load(path)
+        torch.load(file)
     )  # "./data/diffusion_outputs/ddpm_unet01_mnist_9.pth"))
     ddpm.to(device)
     return ddpm

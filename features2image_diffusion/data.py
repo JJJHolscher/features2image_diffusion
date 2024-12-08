@@ -146,7 +146,7 @@ def load_mnist_with_features(
     train_loader = DataLoader(
         train_set, batch_size=batch_size, shuffle=shuffle
     )
-    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=shuffle)
+    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader
 
 
